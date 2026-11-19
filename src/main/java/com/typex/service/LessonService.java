@@ -1,12 +1,17 @@
 package com.typex.service;
 
+import com.typex.dao.LessonAttemptDAO;
 import com.typex.database.DatabaseManager;
 import com.typex.model.Lesson;
+import com.typex.model.LessonAttempt;
 
 import java.sql.*;
+import java.util.Collections;
 import java.util.List;
 
 public class LessonService {
+    private final LessonAttemptDAO attemptDAO = new LessonAttemptDAO();
+
     public boolean isCompleted(int userId, int lessonId) {
         synchronized (DatabaseManager.getInstance().getLock()) {
             try (Connection c = DatabaseManager.getInstance().getConnection();
@@ -24,9 +29,41 @@ public class LessonService {
         }
     }
 
-    public void recordAttempt(int userId, Lesson lesson, double wpm, double accuracy) {
+    public boolean isLessonUnlocked(int userId, Lesson lesson, List<Lesson> allLessons) {
+        if (lesson == null || allLessons == null || allLessons.isEmpty()) return true;
+        // The very first lesson is always unlocked
+        if (lesson.level == 1 && lesson.orderIndex == 1) return true;
+
+        // Find index of this lesson
+        int idx = -1;
+        for (int i = 0; i < allLessons.size(); i++) {
+            if (allLessons.get(i).id == lesson.id) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx <= 0) return true;
+
+        // Previous lesson must be completed
+        Lesson prev = allLessons.get(idx - 1);
+        return isCompleted(userId, prev.id);
+    }
+
+    public void recordAttempt(int userId, Lesson lesson, double wpm, double accuracy, int durationSeconds) {
         if (lesson == null) return;
-        boolean completed = accuracy >= Math.max(1, lesson.minAccuracy) && wpm >= Math.max(1, lesson.minWpm);
+        boolean meetsRequirements = (accuracy >= lesson.minAccuracy) && (wpm >= lesson.minWpm);
+
+        // Record individual attempt in lesson_attempts (Module 6)
+        LessonAttempt attempt = new LessonAttempt();
+        attempt.userId = userId;
+        attempt.lessonId = lesson.id;
+        attempt.wpm = wpm;
+        attempt.accuracy = accuracy;
+        attempt.durationSeconds = durationSeconds;
+        attempt.completed = meetsRequirements;
+        attemptDAO.insert(attempt);
+
+        // Update overall lesson progress
         synchronized (DatabaseManager.getInstance().getLock()) {
             try (Connection c = DatabaseManager.getInstance().getConnection()) {
                 try (PreparedStatement ps = c.prepareStatement(
@@ -43,7 +80,7 @@ public class LessonService {
                             try (PreparedStatement u = c.prepareStatement(
                                     "UPDATE lesson_progress SET completed=?, best_wpm=?, best_accuracy=?, " +
                                     "attempts=attempts+1, last_attempt=CURRENT_TIMESTAMP WHERE id=?")) {
-                                u.setInt(1, (completed || wasCompleted == 1) ? 1 : 0);
+                                u.setInt(1, (meetsRequirements || wasCompleted == 1) ? 1 : 0);
                                 u.setDouble(2, bestWpm);
                                 u.setDouble(3, bestAcc);
                                 u.setInt(4, id);
@@ -55,7 +92,7 @@ public class LessonService {
                                     "VALUES(?,?,?,?,?,1,CURRENT_TIMESTAMP)")) {
                                 i.setInt(1, userId);
                                 i.setInt(2, lesson.id);
-                                i.setInt(3, completed ? 1 : 0);
+                                i.setInt(3, meetsRequirements ? 1 : 0);
                                 i.setDouble(4, wpm);
                                 i.setDouble(5, accuracy);
                                 i.executeUpdate();
@@ -67,6 +104,10 @@ public class LessonService {
                 System.err.println("Error recording lesson attempt: " + e.getMessage());
             }
         }
+    }
+
+    public List<LessonAttempt> getAttemptHistory(int userId, int lessonId) {
+        return attemptDAO.findByLessonAndUser(userId, lessonId, 8);
     }
 
     public int completedCount(int userId) {

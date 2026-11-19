@@ -9,7 +9,11 @@ import java.awt.*;
 
 public class TypingTextPanel extends JTextPane {
     private TypingEngine engine;
-    private Style correct, incorrect, pending, current;
+    private Style correct;
+    private Style incorrect;
+    private Style pending;
+    private Style current;
+    private Style currentWordPending;
 
     public TypingTextPanel() {
         setEditable(false);
@@ -33,7 +37,7 @@ public class TypingTextPanel extends JTextPane {
 
         incorrect = doc.addStyle("i", null);
         StyleConstants.setForeground(incorrect, new Color(0xEF4444));
-        StyleConstants.setBackground(incorrect, ThemeManager.isDark() ? new Color(0x3B1212) : new Color(0xFEE2E2));
+        StyleConstants.setBackground(incorrect, ThemeManager.isDark() ? new Color(0x451212) : new Color(0xFEE2E2));
 
         pending = doc.addStyle("p", null);
         StyleConstants.setForeground(pending, ThemeManager.fgMuted());
@@ -42,6 +46,10 @@ public class TypingTextPanel extends JTextPane {
         StyleConstants.setUnderline(current, true);
         StyleConstants.setForeground(current, ThemeManager.accent());
         StyleConstants.setBackground(current, ThemeManager.isDark() ? new Color(0x2A2A1A) : new Color(0xFEF3C7));
+
+        currentWordPending = doc.addStyle("cwp", null);
+        StyleConstants.setForeground(currentWordPending, ThemeManager.fgPrimary());
+        StyleConstants.setUnderline(currentWordPending, false);
 
         render();
     }
@@ -58,13 +66,27 @@ public class TypingTextPanel extends JTextPane {
             doc.remove(0, doc.getLength());
             String target = engine.getTarget();
             String typed = engine.getTyped();
+            int cur = engine.getCursor();
+
+            // Find current word boundaries
+            int wordStart = cur;
+            while (wordStart > 0 && !Character.isWhitespace(target.charAt(wordStart - 1))) {
+                wordStart--;
+            }
+            int wordEnd = cur;
+            while (wordEnd < target.length() && !Character.isWhitespace(target.charAt(wordEnd))) {
+                wordEnd++;
+            }
+
             for (int i = 0; i < target.length(); i++) {
                 String ch = String.valueOf(target.charAt(i));
                 Style s;
                 if (i < typed.length()) {
                     s = (typed.charAt(i) == target.charAt(i)) ? correct : incorrect;
-                } else if (i == typed.length()) {
+                } else if (i == cur) {
                     s = current;
+                } else if (i >= wordStart && i < wordEnd) {
+                    s = currentWordPending;
                 } else {
                     s = pending;
                 }

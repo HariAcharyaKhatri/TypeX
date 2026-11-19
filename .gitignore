@@ -31,3 +31,5 @@ release.properties
 .settings/
 .DS_Store
 Thumbs.db
+out/
+/TypeX/

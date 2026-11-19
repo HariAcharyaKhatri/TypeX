@@ -3,6 +3,7 @@ package com.typex.ui.pages;
 import com.typex.config.ThemeManager;
 import com.typex.dao.LessonDAO;
 import com.typex.model.Lesson;
+import com.typex.model.LessonAttempt;
 import com.typex.service.AchievementService;
 import com.typex.service.LessonService;
 import com.typex.service.TypingEngine;
@@ -14,6 +15,7 @@ import com.typex.util.SoundManager;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, MainFrame.ThemeAware {
@@ -21,19 +23,29 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
     private final LessonDAO lessonDAO = new LessonDAO();
     private final LessonService lessonService = new LessonService();
     private final AchievementService achievementService = new AchievementService();
-    private final DefaultListModel<Lesson> model = new DefaultListModel<>();
-    private final JList<Lesson> list = new JList<>(model);
+
+    private final DefaultListModel<LessonItem> model = new DefaultListModel<>();
+    private final JList<LessonItem> list = new JList<>(model);
     private final TypingTextPanel textPane = new TypingTextPanel();
     private final VirtualKeyboard keyboard = new VirtualKeyboard();
-    private final JLabel status = new JLabel("Select a lesson to begin");
+
+    private final JLabel titleLabel = new JLabel("Select a lesson to begin");
+    private final JLabel objectiveLabel = new JLabel();
+    private final JLabel requirementsLabel = new JLabel();
     private final JLabel timerLabel = new JLabel("00:00");
     private final JLabel wpmLabel = new JLabel("WPM: 0");
     private final JLabel accLabel = new JLabel("Acc: 100%");
-    private final JButton restart = new JButton("Restart Lesson");
+    private final JButton restartBtn = new JButton("Start Lesson");
     private final JScrollPane listScroll;
 
+    // History panel
+    private final DefaultListModel<String> historyModel = new DefaultListModel<>();
+    private final JList<String> historyList = new JList<>(historyModel);
+
+    private List<Lesson> allLessons = new ArrayList<>();
     private TypingEngine engine;
-    private Lesson active;
+    private Lesson activeLesson;
+    private boolean activeLessonUnlocked = true;
     private Timer ticker;
 
     public LearnTypingPanel(MainFrame frame) {
@@ -41,27 +53,49 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         setLayout(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
-        // Left: lesson list
+        // Left sidebar: lessons list & recent attempts
         list.setFont(list.getFont().deriveFont(13f));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                select(list.getSelectedValue());
+            if (!e.getValueIsAdjusting() && list.getSelectedValue() != null) {
+                selectLesson(list.getSelectedValue().lesson);
             }
         });
+
         listScroll = new JScrollPane(list);
         listScroll.setPreferredSize(new Dimension(280, 0));
-        listScroll.setBorder(BorderFactory.createTitledBorder("Lessons"));
-        add(listScroll, BorderLayout.WEST);
+        listScroll.setBorder(BorderFactory.createTitledBorder("Curriculum Lessons"));
+
+        historyList.setFont(historyList.getFont().deriveFont(11f));
+        JScrollPane historyScroll = new JScrollPane(historyList);
+        historyScroll.setPreferredSize(new Dimension(280, 140));
+        historyScroll.setBorder(BorderFactory.createTitledBorder("Attempt History"));
+
+        JPanel leftPanel = new JPanel(new BorderLayout(4, 4));
+        leftPanel.setOpaque(false);
+        leftPanel.add(listScroll, BorderLayout.CENTER);
+        leftPanel.add(historyScroll, BorderLayout.SOUTH);
+        add(leftPanel, BorderLayout.WEST);
 
         // Center: header + text + keyboard
         JPanel center = new JPanel(new BorderLayout(6, 6));
         center.setOpaque(false);
-        JPanel header = new JPanel(new BorderLayout());
+
+        JPanel header = new JPanel(new BorderLayout(4, 4));
         header.setOpaque(false);
 
-        status.setFont(status.getFont().deriveFont(Font.BOLD, 14f));
-        header.add(status, BorderLayout.WEST);
+        JPanel titleBlock = new JPanel();
+        titleBlock.setLayout(new BoxLayout(titleBlock, BoxLayout.Y_AXIS));
+        titleBlock.setOpaque(false);
+
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        objectiveLabel.setFont(objectiveLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        requirementsLabel.setFont(requirementsLabel.getFont().deriveFont(Font.BOLD, 12f));
+
+        titleBlock.add(titleLabel);
+        titleBlock.add(objectiveLabel);
+        titleBlock.add(requirementsLabel);
+        header.add(titleBlock, BorderLayout.WEST);
 
         JPanel metrics = new JPanel(new FlowLayout(FlowLayout.RIGHT, 14, 0));
         metrics.setOpaque(false);
@@ -81,11 +115,11 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         center.add(keyboard, BorderLayout.SOUTH);
         add(center, BorderLayout.CENTER);
 
-        restart.addActionListener(e -> startActive());
-        restart.setFocusPainted(false);
+        restartBtn.addActionListener(e -> startActive());
+        restartBtn.setFocusPainted(false);
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         south.setOpaque(false);
-        south.add(restart);
+        south.add(restartBtn);
         add(south, BorderLayout.SOUTH);
 
         // Focus & Key handling
@@ -93,14 +127,16 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         textPane.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                textPane.requestFocusInWindow();
+                if (activeLessonUnlocked) {
+                    textPane.requestFocusInWindow();
+                }
             }
         });
 
         textPane.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                if (engine == null || engine.isComplete()) return;
+                if (engine == null || engine.isComplete() || !activeLessonUnlocked) return;
                 if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
                     engine.backspace();
                     e.consume();
@@ -111,6 +147,7 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
                 }
                 char c = e.getKeyChar();
                 if (c == KeyEvent.CHAR_UNDEFINED || c == '\n' || c == '\t' || c < 32) return;
+
                 boolean ok = engine.type(c);
                 if (ok) {
                     SoundManager.keypress();
@@ -120,6 +157,7 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
                 }
                 textPane.render();
                 updateMetrics();
+
                 if (engine.isComplete()) {
                     finishLesson();
                 } else {
@@ -137,30 +175,91 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         setBackground(ThemeManager.bgApp());
         list.setBackground(ThemeManager.bgCard());
         list.setForeground(ThemeManager.fgPrimary());
-        status.setForeground(ThemeManager.fgPrimary());
+        historyList.setBackground(ThemeManager.bgCard());
+        historyList.setForeground(ThemeManager.fgPrimary());
+
+        titleLabel.setForeground(ThemeManager.fgPrimary());
+        objectiveLabel.setForeground(ThemeManager.fgMuted());
+        requirementsLabel.setForeground(ThemeManager.accent());
         timerLabel.setForeground(ThemeManager.accent());
         wpmLabel.setForeground(ThemeManager.accent());
         accLabel.setForeground(ThemeManager.accent());
-        restart.setBackground(ThemeManager.accent());
-        restart.setForeground(Color.BLACK);
+
+        restartBtn.setBackground(ThemeManager.accent());
+        restartBtn.setForeground(Color.BLACK);
+
         textPane.applyTheme();
         keyboard.applyTheme();
         repaint();
     }
 
-    private void select(Lesson l) {
+    private void selectLesson(Lesson l) {
         if (l == null) return;
-        active = l;
-        status.setText(l.title + " — " + (l.objective == null ? "" : l.objective));
-        startActive();
+        activeLesson = l;
+        int uid = frame.getUser().id;
+
+        activeLessonUnlocked = lessonService.isLessonUnlocked(uid, l, allLessons);
+        boolean isCompleted = lessonService.isCompleted(uid, l.id);
+
+        titleLabel.setText((isCompleted ? "✓ " : (activeLessonUnlocked ? "▶ " : "🔒 ")) + l.title);
+        objectiveLabel.setText("Objective: " + (l.objective != null ? l.objective : "-"));
+        requirementsLabel.setText(String.format("Goal: ≥ %.0f WPM · ≥ %.0f%% Accuracy %s",
+                l.minWpm, l.minAccuracy, (isCompleted ? "[COMPLETED]" : (activeLessonUnlocked ? "[AVAILABLE]" : "[LOCKED]"))));
+
+        restartBtn.setEnabled(activeLessonUnlocked);
+        restartBtn.setText(activeLessonUnlocked ? "Start / Restart" : "Locked");
+
+        loadHistory(l);
+
+        if (activeLessonUnlocked) {
+            startActive();
+        } else {
+            if (ticker != null) ticker.stop();
+            engine = null;
+            textPane.setText("This lesson is locked. Complete the preceding lesson meeting both speed and accuracy goals to unlock.");
+        }
+    }
+
+    private void loadHistory(Lesson l) {
+        if (frame.getUser() == null || l == null) return;
+        final int uid = frame.getUser().id;
+        final int lid = l.id;
+
+        SwingWorker<List<LessonAttempt>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<LessonAttempt> doInBackground() {
+                return lessonService.getAttemptHistory(uid, lid);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<LessonAttempt> attempts = get();
+                    historyModel.clear();
+                    if (attempts.isEmpty()) {
+                        historyModel.addElement("No attempts recorded yet.");
+                    } else {
+                        for (LessonAttempt a : attempts) {
+                            String date = (a.attemptedAt != null && a.attemptedAt.length() > 16)
+                                    ? a.attemptedAt.substring(5, 16) : a.attemptedAt;
+                            String status = a.completed ? "✓ PASS" : "✗ RETRY";
+                            historyModel.addElement(String.format("%s: %.0f WPM | %.0f%% [%s]",
+                                    date, a.wpm, a.accuracy, status));
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        };
+        worker.execute();
     }
 
     private void startActive() {
-        if (active == null) return;
-        engine = new TypingEngine(active.practiceText);
+        if (activeLesson == null || !activeLessonUnlocked) return;
+        engine = new TypingEngine(activeLesson.practiceText);
         textPane.setEngine(engine);
         updateMetrics();
         updateKeyboardHighlight();
+
         if (ticker != null) ticker.stop();
         ticker = new Timer(300, e -> {
             updateMetrics();
@@ -173,10 +272,10 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
     }
 
     private void updateKeyboardHighlight() {
-        if (engine == null || active == null || active.practiceText == null) return;
+        if (engine == null || activeLesson == null || activeLesson.practiceText == null) return;
         int cur = engine.getCursor();
-        if (cur < active.practiceText.length()) {
-            keyboard.highlightKey(active.practiceText.charAt(cur));
+        if (cur < activeLesson.practiceText.length()) {
+            keyboard.highlightKey(activeLesson.practiceText.charAt(cur));
         }
     }
 
@@ -192,31 +291,45 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         if (ticker != null) ticker.stop();
         engine.stop();
         updateMetrics();
+
         final double wpm = engine.netWpm();
         final double acc = engine.accuracy();
+        final int elapsedSec = Math.max(1, (int) Math.round(engine.elapsedSeconds()));
         final int uid = frame.getUser().id;
-        final Lesson finishedLesson = active;
+        final Lesson finishedLesson = activeLesson;
+        final boolean passed = (acc >= finishedLesson.minAccuracy) && (wpm >= finishedLesson.minWpm);
 
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
-                lessonService.recordAttempt(uid, finishedLesson, wpm, acc);
-                int completed = lessonService.completedCount(uid);
-                var newly = achievementService.evaluateAfterLesson(uid, completed);
-                if (!newly.isEmpty()) {
-                    SoundManager.achievement();
-                } else {
+                lessonService.recordAttempt(uid, finishedLesson, wpm, acc, elapsedSec);
+                int completedCount = lessonService.completedCount(uid);
+                var newly = achievementService.evaluateAfterLesson(uid, completedCount);
+                if (completedCount >= allLessons.size() && !allLessons.isEmpty()) {
+                    achievementService.evaluateAfterLesson(uid, 100);
+                }
+                if (passed) {
                     SoundManager.complete();
+                } else {
+                    SoundManager.error();
                 }
                 return null;
             }
 
             @Override
             protected void done() {
-                JOptionPane.showMessageDialog(LearnTypingPanel.this,
-                        String.format("Lesson complete!\nWPM: %.1f\nAccuracy: %.1f%%", wpm, acc),
-                        "Lesson Finished", JOptionPane.INFORMATION_MESSAGE);
-                frame.refreshAll();
+                String message;
+                if (passed) {
+                    message = String.format("🎉 Lesson Passed!\n\nYour Speed: %.1f WPM (Goal: ≥ %.0f)\nYour Accuracy: %.1f%% (Goal: ≥ %.0f%%)\n\nNext lesson unlocked!",
+                            wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy);
+                } else {
+                    message = String.format("Lesson Attempt Recorded.\n\nYour Speed: %.1f WPM (Required: ≥ %.0f)\nYour Accuracy: %.1f%% (Required: ≥ %.0f%%)\n\nTry again to unlock the next lesson!",
+                            wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy);
+                }
+                JOptionPane.showMessageDialog(LearnTypingPanel.this, message,
+                        passed ? "Goal Achieved" : "Keep Practicing", JOptionPane.INFORMATION_MESSAGE);
+
+                refresh();
             }
         };
         worker.execute();
@@ -224,28 +337,40 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
 
     @Override
     public void refresh() {
-        SwingWorker<List<Lesson>, Void> worker = new SwingWorker<>() {
+        if (frame.getUser() == null) return;
+        final int uid = frame.getUser().id;
+
+        SwingWorker<List<LessonItem>, Void> worker = new SwingWorker<>() {
             @Override
-            protected List<Lesson> doInBackground() {
-                return lessonDAO.findAll();
+            protected List<LessonItem> doInBackground() {
+                allLessons = lessonDAO.findAll();
+                List<LessonItem> items = new ArrayList<>();
+                for (Lesson l : allLessons) {
+                    boolean unlocked = lessonService.isLessonUnlocked(uid, l, allLessons);
+                    boolean completed = lessonService.isCompleted(uid, l.id);
+                    items.add(new LessonItem(l, unlocked, completed));
+                }
+                return items;
             }
 
             @Override
             protected void done() {
                 try {
-                    List<Lesson> lessons = get();
-                    Lesson previouslySelected = active;
+                    List<LessonItem> items = get();
+                    Lesson previouslySelected = activeLesson;
                     model.clear();
-                    for (Lesson l : lessons) {
-                        model.addElement(l);
-                    }
-                    if (previouslySelected != null) {
-                        for (int i = 0; i < model.size(); i++) {
-                            if (model.get(i).id == previouslySelected.id) {
-                                list.setSelectedIndex(i);
-                                break;
-                            }
+                    int selectedIdx = -1;
+
+                    for (int i = 0; i < items.size(); i++) {
+                        LessonItem it = items.get(i);
+                        model.addElement(it);
+                        if (previouslySelected != null && it.lesson.id == previouslySelected.id) {
+                            selectedIdx = i;
                         }
+                    }
+
+                    if (selectedIdx >= 0) {
+                        list.setSelectedIndex(selectedIdx);
                     } else if (!model.isEmpty()) {
                         list.setSelectedIndex(0);
                     }
@@ -253,5 +378,23 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
             }
         };
         worker.execute();
+    }
+
+    private static class LessonItem {
+        final Lesson lesson;
+        final boolean unlocked;
+        final boolean completed;
+
+        LessonItem(Lesson lesson, boolean unlocked, boolean completed) {
+            this.lesson = lesson;
+            this.unlocked = unlocked;
+            this.completed = completed;
+        }
+
+        @Override
+        public String toString() {
+            String prefix = completed ? "✓ " : (unlocked ? "▶ " : "🔒 ");
+            return prefix + "L" + lesson.level + "." + lesson.orderIndex + ": " + lesson.title;
+        }
     }
 }

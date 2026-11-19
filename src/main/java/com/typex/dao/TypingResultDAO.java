@@ -13,8 +13,9 @@ public class TypingResultDAO {
             try (Connection c = DatabaseManager.getInstance().getConnection();
                  PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO typing_test_results(user_id,category,duration_seconds,gross_wpm,net_wpm,accuracy," +
-                    "correct_chars,incorrect_chars,total_chars,total_keystrokes,backspaces,error_percent) " +
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+                    "correct_chars,incorrect_chars,total_chars,total_keystrokes,backspaces,error_percent," +
+                    "raw_accuracy,corrected_errors,uncorrected_errors,consistency,raw_keystrokes) " +
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, r.userId);
                 ps.setString(2, r.category);
                 ps.setInt(3, r.durationSeconds);
@@ -27,6 +28,11 @@ public class TypingResultDAO {
                 ps.setInt(10, r.totalKeystrokes);
                 ps.setInt(11, r.backspaces);
                 ps.setDouble(12, r.errorPercent);
+                ps.setDouble(13, r.rawAccuracy);
+                ps.setInt(14, r.correctedErrors);
+                ps.setInt(15, r.uncorrectedErrors);
+                ps.setDouble(16, r.consistency);
+                ps.setInt(17, r.rawKeystrokes);
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
@@ -75,6 +81,25 @@ public class TypingResultDAO {
         }
     }
 
+    public TypingResult findBestByUserAndCategory(int userId, String category, int durationSeconds) {
+        synchronized (DatabaseManager.getInstance().getLock()) {
+            try (Connection c = DatabaseManager.getInstance().getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                    "SELECT * FROM typing_test_results WHERE user_id=? AND category=? AND duration_seconds=? " +
+                    "ORDER BY net_wpm DESC LIMIT 1")) {
+                ps.setInt(1, userId);
+                ps.setString(2, category);
+                ps.setInt(3, durationSeconds);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? map(rs) : null;
+                }
+            } catch (SQLException e) {
+                System.err.println("Error fetching best result for category: " + e.getMessage());
+                return null;
+            }
+        }
+    }
+
     public int countByUser(int userId) {
         synchronized (DatabaseManager.getInstance().getLock()) {
             try (Connection c = DatabaseManager.getInstance().getConnection();
@@ -107,6 +132,16 @@ public class TypingResultDAO {
         r.backspaces = rs.getInt("backspaces");
         r.errorPercent = rs.getDouble("error_percent");
         r.completedAt = rs.getString("completed_at");
+
+        // Optional Phase 2 columns
+        try {
+            r.rawAccuracy = rs.getDouble("raw_accuracy");
+            r.correctedErrors = rs.getInt("corrected_errors");
+            r.uncorrectedErrors = rs.getInt("uncorrected_errors");
+            r.consistency = rs.getDouble("consistency");
+            r.rawKeystrokes = rs.getInt("raw_keystrokes");
+        } catch (SQLException ignored) {}
+
         return r;
     }
 }
