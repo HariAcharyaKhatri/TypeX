@@ -5,4 +5,6 @@ public class Achievement {
     public String code, title, description, icon;
     public int xp;
     public boolean unlocked;
+    public String category = "General";
+    public double progressPercent = 0.0;
 }

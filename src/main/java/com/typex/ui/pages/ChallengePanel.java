@@ -1,7 +1,11 @@
 package com.typex.ui.pages;
 
 import com.typex.config.ThemeManager;
+import com.typex.model.Challenge;
+import com.typex.model.UserChallenge;
+import com.typex.service.GamificationService;
 import com.typex.ui.MainFrame;
+import com.typex.util.SoundManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -10,80 +14,214 @@ import java.util.List;
 
 public class ChallengePanel extends JPanel implements MainFrame.Refreshable, MainFrame.ThemeAware {
     private final MainFrame frame;
-    private final List<ChallengeCard> cards = new ArrayList<>();
+    private final GamificationService gamification = new GamificationService();
+    private final JPanel contentPanel = new JPanel();
+    private final JScrollPane scrollPane;
+    private List<UserChallenge> activeChallenges = new ArrayList<>();
 
     public ChallengePanel(MainFrame frame) {
         this.frame = frame;
         setLayout(new BorderLayout(12, 12));
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
-        JPanel grid = new JPanel(new GridLayout(0, 2, 14, 14));
-        grid.setOpaque(false);
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setOpaque(false);
 
-        grid.add(createCard("⚡ Speed Challenge", "Type as fast as you can for 60 seconds with steady rhythm.", "speed", 60));
-        grid.add(createCard("🎯 Accuracy Challenge", "Maintain 100% precision for 30 seconds without misstrokes.", "accuracy", 30));
-        grid.add(createCard("💎 Perfect Typing", "Zero mistakes allowed for 15 seconds of intense focus.", "perfect", 15));
-        grid.add(createCard("⏱ Time Attack", "120-second sustained typing endurance drill.", "time", 120));
-        add(grid, BorderLayout.NORTH);
+        scrollPane = new JScrollPane(contentPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrollPane, BorderLayout.CENTER);
 
-        JLabel note = new JLabel("<html><i>Challenges run offline. Choose any drill to push your speed and accuracy to the next level.</i></html>");
-        note.setForeground(ThemeManager.fgMuted());
-        add(note, BorderLayout.SOUTH);
+        JLabel footerNote = new JLabel("<html><i>Challenges rotate deterministically on your local calendar date. Practice offline to claim XP!</i></html>");
+        footerNote.setForeground(ThemeManager.fgMuted());
+        add(footerNote, BorderLayout.SOUTH);
 
         applyTheme();
-    }
-
-    private JPanel createCard(String title, String desc, String mode, int seconds) {
-        ChallengeCard p = new ChallengeCard(title, desc, () -> frame.navigate("test"));
-        cards.add(p);
-        return p;
+        refresh();
     }
 
     @Override
     public void applyTheme() {
         setBackground(ThemeManager.bgApp());
-        for (ChallengeCard c : cards) {
-            c.applyTheme();
-        }
-        repaint();
+        renderChallenges();
     }
 
     @Override
-    public void refresh() {}
+    public void refresh() {
+        if (frame.getUser() == null) return;
+        final int uid = frame.getUser().id;
 
-    private static class ChallengeCard extends JPanel {
-        private final JLabel titleLabel = new JLabel();
-        private final JLabel descLabel = new JLabel();
-        private final JButton startBtn = new JButton("Start Challenge");
+        SwingWorker<List<UserChallenge>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<UserChallenge> doInBackground() {
+                return gamification.getActiveChallenges(uid);
+            }
 
-        public ChallengeCard(String title, String desc, Runnable onStart) {
-            setLayout(new BorderLayout(8, 8));
-            titleLabel.setText(title);
-            titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+            @Override
+            protected void done() {
+                try {
+                    activeChallenges = get();
+                    renderChallenges();
+                } catch (Exception ignored) {}
+            }
+        };
+        worker.execute();
+    }
 
-            descLabel.setText("<html>" + desc + "</html>");
-            descLabel.setFont(descLabel.getFont().deriveFont(Font.PLAIN, 13f));
+    private void renderChallenges() {
+        contentPanel.removeAll();
 
-            startBtn.setFocusPainted(false);
-            startBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            startBtn.addActionListener(e -> onStart.run());
+        // Daily Section
+        JLabel dailyHeader = new JLabel("🎯 Today's Daily Missions");
+        dailyHeader.setFont(dailyHeader.getFont().deriveFont(Font.BOLD, 18f));
+        dailyHeader.setForeground(ThemeManager.accent());
+        dailyHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(dailyHeader);
+        contentPanel.add(Box.createVerticalStrut(10));
 
-            add(titleLabel, BorderLayout.NORTH);
-            add(descLabel, BorderLayout.CENTER);
-            add(startBtn, BorderLayout.SOUTH);
+        JPanel dailyGrid = new JPanel(new GridLayout(0, 3, 14, 14));
+        dailyGrid.setOpaque(false);
+        dailyGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-            applyTheme();
+        // Weekly Section
+        JPanel weeklyGrid = new JPanel(new GridLayout(0, 2, 14, 14));
+        weeklyGrid.setOpaque(false);
+        weeklyGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        for (UserChallenge uc : activeChallenges) {
+            Challenge ch = uc.challenge;
+            if (ch == null) continue;
+            JPanel card = createChallengeCard(uc);
+            if ("DAILY".equalsIgnoreCase(ch.type)) {
+                dailyGrid.add(card);
+            } else {
+                weeklyGrid.add(card);
+            }
         }
 
-        public void applyTheme() {
-            setBackground(ThemeManager.bgCard());
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x2E2E2E) : new Color(0xE5E7EB)),
-                    BorderFactory.createEmptyBorder(16, 16, 16, 16)));
-            titleLabel.setForeground(ThemeManager.accent());
-            descLabel.setForeground(ThemeManager.fgPrimary());
-            startBtn.setBackground(ThemeManager.accent());
-            startBtn.setForeground(Color.BLACK);
+        contentPanel.add(dailyGrid);
+        contentPanel.add(Box.createVerticalStrut(24));
+
+        JLabel weeklyHeader = new JLabel("⚡ Weekly Challenges");
+        weeklyHeader.setFont(weeklyHeader.getFont().deriveFont(Font.BOLD, 18f));
+        weeklyHeader.setForeground(ThemeManager.accent());
+        weeklyHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(weeklyHeader);
+        contentPanel.add(Box.createVerticalStrut(10));
+
+        contentPanel.add(weeklyGrid);
+
+        contentPanel.revalidate();
+        contentPanel.repaint();
+    }
+
+    private JPanel createChallengeCard(UserChallenge uc) {
+        Challenge ch = uc.challenge;
+        JPanel p = new JPanel(new BorderLayout(10, 10));
+        p.setBackground(ThemeManager.bgCard());
+        p.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(uc.completed ? (ThemeManager.isDark() ? new Color(0x10B981) : new Color(0x059669))
+                        : (ThemeManager.isDark() ? new Color(0x333333) : new Color(0xE5E7EB)), uc.completed ? 2 : 1),
+                BorderFactory.createEmptyBorder(14, 14, 14, 14)));
+
+        // Header: Type badge & XP
+        JPanel cardHeader = new JPanel(new BorderLayout());
+        cardHeader.setOpaque(false);
+
+        JLabel typeBadge = new JLabel(ch.type);
+        typeBadge.setFont(typeBadge.getFont().deriveFont(Font.BOLD, 10f));
+        typeBadge.setForeground("DAILY".equalsIgnoreCase(ch.type) ? new Color(0x38BDF8) : new Color(0xA855F7));
+        cardHeader.add(typeBadge, BorderLayout.WEST);
+
+        JLabel xpBadge = new JLabel("+" + ch.xpReward + " XP");
+        xpBadge.setFont(xpBadge.getFont().deriveFont(Font.BOLD, 12f));
+        xpBadge.setForeground(ThemeManager.accent());
+        cardHeader.add(xpBadge, BorderLayout.EAST);
+
+        // Center: Title & Description
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setOpaque(false);
+
+        JLabel titleLbl = new JLabel(ch.title);
+        titleLbl.setFont(titleLbl.getFont().deriveFont(Font.BOLD, 15f));
+        titleLbl.setForeground(ThemeManager.fgPrimary());
+        centerPanel.add(titleLbl);
+        centerPanel.add(Box.createVerticalStrut(4));
+
+        JLabel descLbl = new JLabel("<html>" + ch.description + "</html>");
+        descLbl.setFont(descLbl.getFont().deriveFont(Font.PLAIN, 12f));
+        descLbl.setForeground(ThemeManager.fgMuted());
+        centerPanel.add(descLbl);
+        centerPanel.add(Box.createVerticalStrut(8));
+
+        // Progress bar
+        int progressInt = (int) Math.round(uc.getProgressPercentage());
+        JProgressBar pb = new JProgressBar(0, 100);
+        pb.setValue(progressInt);
+        pb.setStringPainted(true);
+        pb.setForeground(ThemeManager.accent());
+        pb.setBackground(ThemeManager.isDark() ? new Color(0x222222) : new Color(0xE2E8F0));
+
+        if (uc.completed) {
+            pb.setString("100% Completed");
+        } else {
+            String progText = String.format("%.0f / %.0f", uc.currentProgress, ch.targetValue);
+            pb.setString(progText + " (" + progressInt + "%)");
+        }
+        centerPanel.add(pb);
+
+        // Bottom action button
+        JPanel actionPanel = new JPanel(new BorderLayout());
+        actionPanel.setOpaque(false);
+
+        if (uc.completed && !uc.rewardClaimed) {
+            JButton claimBtn = new JButton("Claim Reward (+" + ch.xpReward + " XP)");
+            claimBtn.setBackground(new Color(0x10B981));
+            claimBtn.setForeground(Color.WHITE);
+            claimBtn.setFocusPainted(false);
+            claimBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            claimBtn.addActionListener(e -> {
+                gamification.claimChallengeReward(frame.getUser().id, ch.id);
+                SoundManager.achievement();
+                frame.refreshAll();
+                refresh();
+            });
+            actionPanel.add(claimBtn, BorderLayout.CENTER);
+        } else if (uc.completed) {
+            JLabel doneLbl = new JLabel("✓ Completed & Claimed", SwingConstants.CENTER);
+            doneLbl.setFont(doneLbl.getFont().deriveFont(Font.BOLD, 12f));
+            doneLbl.setForeground(new Color(0x10B981));
+            actionPanel.add(doneLbl, BorderLayout.CENTER);
+        } else {
+            JButton actionBtn = new JButton(getActionText(ch.requirementType));
+            actionBtn.setBackground(ThemeManager.bgCard());
+            actionBtn.setForeground(ThemeManager.fgPrimary());
+            actionBtn.setFocusPainted(false);
+            actionBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            actionBtn.addActionListener(e -> handleNavigation(ch.requirementType));
+            actionPanel.add(actionBtn, BorderLayout.CENTER);
+        }
+
+        p.add(cardHeader, BorderLayout.NORTH);
+        p.add(centerPanel, BorderLayout.CENTER);
+        p.add(actionPanel, BorderLayout.SOUTH);
+
+        return p;
+    }
+
+    private String getActionText(String reqType) {
+        if ("LESSONS_COUNT".equalsIgnoreCase(reqType)) return "Go to Lessons";
+        return "Start Typing Test";
+    }
+
+    private void handleNavigation(String reqType) {
+        if ("LESSONS_COUNT".equalsIgnoreCase(reqType)) {
+            frame.navigate("learn");
+        } else {
+            frame.navigate("test");
         }
     }
 }

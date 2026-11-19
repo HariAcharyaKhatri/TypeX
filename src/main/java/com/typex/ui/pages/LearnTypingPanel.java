@@ -5,6 +5,7 @@ import com.typex.dao.LessonDAO;
 import com.typex.model.Lesson;
 import com.typex.model.LessonAttempt;
 import com.typex.service.AchievementService;
+import com.typex.service.GamificationService;
 import com.typex.service.LessonService;
 import com.typex.service.TypingEngine;
 import com.typex.ui.MainFrame;
@@ -23,6 +24,7 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
     private final LessonDAO lessonDAO = new LessonDAO();
     private final LessonService lessonService = new LessonService();
     private final AchievementService achievementService = new AchievementService();
+    private final GamificationService gamificationService = new GamificationService();
 
     private final DefaultListModel<LessonItem> model = new DefaultListModel<>();
     private final JList<LessonItem> list = new JList<>(model);
@@ -299,37 +301,56 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         final Lesson finishedLesson = activeLesson;
         final boolean passed = (acc >= finishedLesson.minAccuracy) && (wpm >= finishedLesson.minWpm);
 
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+        SwingWorker<GamificationService.SessionReward, Void> worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() {
+            protected GamificationService.SessionReward doInBackground() {
                 lessonService.recordAttempt(uid, finishedLesson, wpm, acc, elapsedSec);
-                int completedCount = lessonService.completedCount(uid);
-                var newly = achievementService.evaluateAfterLesson(uid, completedCount);
-                if (completedCount >= allLessons.size() && !allLessons.isEmpty()) {
-                    achievementService.evaluateAfterLesson(uid, 100);
-                }
-                if (passed) {
+                GamificationService.SessionReward reward = gamificationService.recordLessonCompletion(
+                        uid, finishedLesson, wpm, acc, elapsedSec, passed);
+                if (reward != null && reward.leveledUp) {
+                    SoundManager.levelUp();
+                } else if (passed) {
                     SoundManager.complete();
                 } else {
                     SoundManager.error();
                 }
-                return null;
+                return reward;
             }
 
             @Override
             protected void done() {
-                String message;
-                if (passed) {
-                    message = String.format("🎉 Lesson Passed!\n\nYour Speed: %.1f WPM (Goal: ≥ %.0f)\nYour Accuracy: %.1f%% (Goal: ≥ %.0f%%)\n\nNext lesson unlocked!",
-                            wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy);
-                } else {
-                    message = String.format("Lesson Attempt Recorded.\n\nYour Speed: %.1f WPM (Required: ≥ %.0f)\nYour Accuracy: %.1f%% (Required: ≥ %.0f%%)\n\nTry again to unlock the next lesson!",
-                            wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy);
-                }
-                JOptionPane.showMessageDialog(LearnTypingPanel.this, message,
-                        passed ? "Goal Achieved" : "Keep Practicing", JOptionPane.INFORMATION_MESSAGE);
+                try {
+                    GamificationService.SessionReward reward = get();
+                    StringBuilder message = new StringBuilder();
+                    if (passed) {
+                        message.append(String.format("🎉 Lesson Passed!\n\nYour Speed: %.1f WPM (Goal: ≥ %.0f)\nYour Accuracy: %.1f%% (Goal: ≥ %.0f%%)\n\nNext lesson unlocked!\n",
+                                wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy));
+                    } else {
+                        message.append(String.format("Lesson Attempt Recorded.\n\nYour Speed: %.1f WPM (Required: ≥ %.0f)\nYour Accuracy: %.1f%% (Required: ≥ %.0f%%)\n\nTry again to unlock the next lesson!\n",
+                                wpm, finishedLesson.minWpm, acc, finishedLesson.minAccuracy));
+                    }
 
-                refresh();
+                    if (reward != null) {
+                        message.append("\nRewards: +").append(reward.xpGained).append(" XP");
+                        if (reward.leveledUp) {
+                            message.append("\n🌟 LEVEL UP! You reached Level ").append(reward.newLevel).append("!");
+                        }
+                        if (reward.goalCompleted) {
+                            message.append("\n🎯 Daily Goal Achieved! (+150 Bonus XP)");
+                        }
+                        if (reward.currentStreak > 1) {
+                            message.append("\n🔥 Practice Streak: ").append(reward.currentStreak).append(" days!");
+                        }
+                    }
+
+                    JOptionPane.showMessageDialog(LearnTypingPanel.this, message.toString(),
+                            passed ? "Goal Achieved" : "Keep Practicing", JOptionPane.INFORMATION_MESSAGE);
+
+                    frame.refreshAll();
+                    refresh();
+                } catch (Exception ignored) {
+                    refresh();
+                }
             }
         };
         worker.execute();

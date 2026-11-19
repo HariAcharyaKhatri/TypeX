@@ -15,12 +15,13 @@ public class ProfilePanel extends JDialog {
     private final JTextField usernameField = new JTextField(15);
     private final JComboBox<String> skillBox = new JComboBox<>(new String[]{"Beginner", "Intermediate", "Advanced", "Pro"});
     private final JSpinner goalSpinner = new JSpinner(new SpinnerNumberModel(30, 5, 500, 5));
+    private final JLabel statsSummary = new JLabel("-");
 
     public ProfilePanel(MainFrame frame, User current) {
         super(frame, "User Profile Management", true);
         this.frame = frame;
         setLayout(new BorderLayout(8, 8));
-        setSize(460, 340);
+        setSize(480, 370);
         setLocationRelativeTo(frame);
         setResizable(false);
 
@@ -37,18 +38,13 @@ public class ProfilePanel extends JDialog {
         form.add(skillBox);
         form.add(new JLabel("Daily Goal (minutes):"));
         form.add(goalSpinner);
+        form.add(new JLabel("Rank & Streak:"));
+        form.add(statsSummary);
 
         add(form, BorderLayout.CENTER);
 
         // When switching user in combo box, update the fields
-        userBox.addActionListener(e -> {
-            User sel = (User) userBox.getSelectedItem();
-            if (sel != null) {
-                usernameField.setText(sel.username);
-                skillBox.setSelectedItem(sel.skillLevel);
-                goalSpinner.setValue(sel.dailyGoal > 0 ? sel.dailyGoal : 30);
-            }
-        });
+        userBox.addActionListener(e -> updateFieldsForSelected());
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         JButton createBtn = new JButton("Create New");
@@ -81,11 +77,22 @@ public class ProfilePanel extends JDialog {
             userBox.setSelectedIndex(0);
         }
 
+        updateFieldsForSelected();
+    }
+
+    private void updateFieldsForSelected() {
         User sel = (User) userBox.getSelectedItem();
         if (sel != null) {
             usernameField.setText(sel.username);
             skillBox.setSelectedItem(sel.skillLevel);
             goalSpinner.setValue(sel.dailyGoal > 0 ? sel.dailyGoal : 30);
+            try {
+                com.typex.model.UserXP xp = new com.typex.dao.UserXPDAO().getForUser(sel.id);
+                com.typex.model.PracticeStreak ps = new com.typex.dao.PracticeStreakDAO().getForUser(sel.id);
+                statsSummary.setText(String.format("Level %d (%d XP) · 🔥 %d day streak", xp.level, xp.totalXp, ps.currentStreak));
+            } catch (Exception e) {
+                statsSummary.setText("-");
+            }
         }
     }
 

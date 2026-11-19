@@ -55,7 +55,14 @@ public class TopBar extends JPanel {
         LocalDate now = LocalDate.now();
         dateLabel.setText(now.format(DateTimeFormatter.ofPattern("EEEE, MMM d yyyy")));
         if (frame != null && frame.getUser() != null) {
-            userLabel.setText("👤 " + frame.getUser().username);
+            try {
+                com.typex.model.UserXP xp = new com.typex.dao.UserXPDAO().getForUser(frame.getUser().id);
+                com.typex.model.PracticeStreak streak = new com.typex.dao.PracticeStreakDAO().getForUser(frame.getUser().id);
+                String streakText = streak.currentStreak > 0 ? " · 🔥 " + streak.currentStreak : "";
+                userLabel.setText(String.format("👤 %s (Lvl %d%s)", frame.getUser().username, xp.level, streakText));
+            } catch (Exception e) {
+                userLabel.setText("👤 " + frame.getUser().username);
+            }
         }
     }
 

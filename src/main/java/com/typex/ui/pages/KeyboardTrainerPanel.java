@@ -276,6 +276,10 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
                 ks.accuracy = acc;
                 ks.avgReactionTimeMs = avgReact;
                 sessionDAO.insert(ks);
+
+                int count = sessionDAO.findByUser(uid, 100).size();
+                new com.typex.service.AchievementService().evaluateKeyboardDrills(uid, count);
+                new com.typex.dao.UserXPDAO().addXP(uid, 30);
                 return null;
             }
         };

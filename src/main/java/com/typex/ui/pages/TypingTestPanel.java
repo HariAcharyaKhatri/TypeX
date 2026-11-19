@@ -5,6 +5,7 @@ import com.typex.model.Achievement;
 import com.typex.model.PersonalBest;
 import com.typex.model.TypingResult;
 import com.typex.service.AchievementService;
+import com.typex.service.GamificationService;
 import com.typex.service.StatisticsService;
 import com.typex.service.TypingEngine;
 import com.typex.ui.MainFrame;
@@ -28,6 +29,7 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
     private final MainFrame frame;
     private final StatisticsService stats = new StatisticsService();
     private final AchievementService achievements = new AchievementService();
+    private final GamificationService gamification = new GamificationService();
 
     private final JComboBox<String> durationBox = new JComboBox<>(DURATIONS);
     private final JComboBox<String> categoryBox = new JComboBox<>(CATEGORIES);
@@ -364,20 +366,17 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
             @Override
             protected SaveResultData doInBackground() {
                 boolean isNewPb = stats.saveResult(r, historicalErrors);
-                int total = stats.testCount(r.userId);
-                List<Achievement> unlocked = achievements.evaluateAfterTest(r.userId, r, total);
-                unlocked.addAll(achievements.evaluateStreak(r.userId, stats.streak(r.userId)));
-                if (r.consistency >= 90.0) {
-                    unlocked.addAll(achievements.evaluateAfterTest(r.userId, r, total)); // evaluated
-                }
-                return new SaveResultData(isNewPb, unlocked);
+                GamificationService.SessionReward reward = gamification.recordTestCompletion(r.userId, r, isNewPb);
+                return new SaveResultData(isNewPb, reward);
             }
 
             @Override
             protected void done() {
                 try {
                     SaveResultData data = get();
-                    if (data.isNewPb) {
+                    if (data.reward != null && data.reward.leveledUp) {
+                        SoundManager.levelUp();
+                    } else if (data.isNewPb) {
                         SoundManager.achievement();
                     } else {
                         SoundManager.complete();
@@ -385,7 +384,9 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
 
                     TypingResultDialog dlg = new TypingResultDialog(
                             SwingUtilities.getWindowAncestor(TypingTestPanel.this),
-                            r, data.isNewPb, previousPb, data.unlocked, TypingTestPanel.this::startTest);
+                            r, data.isNewPb, previousPb, data.reward,
+                            (data.reward != null ? data.reward.newlyUnlocked : null),
+                            TypingTestPanel.this::startTest);
                     dlg.setVisible(true);
 
                     frame.refreshAll();
@@ -398,11 +399,11 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
 
     private static class SaveResultData {
         final boolean isNewPb;
-        final List<Achievement> unlocked;
+        final GamificationService.SessionReward reward;
 
-        SaveResultData(boolean isNewPb, List<Achievement> unlocked) {
+        SaveResultData(boolean isNewPb, GamificationService.SessionReward reward) {
             this.isNewPb = isNewPb;
-            this.unlocked = unlocked;
+            this.reward = reward;
         }
     }
 

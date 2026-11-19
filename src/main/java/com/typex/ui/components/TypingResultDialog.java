@@ -3,41 +3,77 @@ package com.typex.ui.components;
 import com.typex.config.ThemeManager;
 import com.typex.model.Achievement;
 import com.typex.model.TypingResult;
+import com.typex.model.UserChallenge;
+import com.typex.service.GamificationService;
 
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
 
 public class TypingResultDialog extends JDialog {
-    public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm, List<Achievement> newlyUnlocked, Runnable onTryAgain) {
+
+    public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm,
+                              List<Achievement> newlyUnlocked, Runnable onTryAgain) {
+        this(parent, r, isNewPersonalBest, previousPbWpm, null, newlyUnlocked, onTryAgain);
+    }
+
+    public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm,
+                              GamificationService.SessionReward reward, List<Achievement> newlyUnlocked, Runnable onTryAgain) {
         super(parent, "Test Results", ModalityType.APPLICATION_MODAL);
         setLayout(new BorderLayout(12, 12));
-        setSize(560, 520);
+        setSize(580, 560);
         setLocationRelativeTo(parent);
         setResizable(false);
 
         JPanel root = new JPanel(new BorderLayout(12, 12));
         root.setBackground(ThemeManager.bgApp());
-        root.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
+        root.setBorder(BorderFactory.createEmptyBorder(18, 24, 18, 24));
 
         // Header
-        JPanel header = new JPanel(new BorderLayout(4, 4));
+        JPanel header = new JPanel();
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
         header.setOpaque(false);
+
         JLabel title = new JLabel("Test Complete!", SwingConstants.CENTER);
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 24f));
         title.setForeground(ThemeManager.fgPrimary());
-        header.add(title, BorderLayout.NORTH);
+        header.add(title);
+        header.add(Box.createVerticalStrut(4));
+
+        if (reward != null && reward.leveledUp) {
+            JLabel lvlBanner = new JLabel("🎉 LEVEL UP! You reached Level " + reward.newLevel + "! 🎉", SwingConstants.CENTER);
+            lvlBanner.setAlignmentX(Component.CENTER_ALIGNMENT);
+            lvlBanner.setFont(lvlBanner.getFont().deriveFont(Font.BOLD, 16f));
+            lvlBanner.setForeground(new Color(0x10B981));
+            header.add(lvlBanner);
+            header.add(Box.createVerticalStrut(2));
+        }
 
         if (isNewPersonalBest) {
             JLabel pbBanner = new JLabel("⭐ NEW PERSONAL BEST! ⭐", SwingConstants.CENTER);
+            pbBanner.setAlignmentX(Component.CENTER_ALIGNMENT);
             pbBanner.setFont(pbBanner.getFont().deriveFont(Font.BOLD, 15f));
             pbBanner.setForeground(new Color(0xF59E0B));
-            header.add(pbBanner, BorderLayout.CENTER);
+            header.add(pbBanner);
         } else if (previousPbWpm > 0) {
             JLabel pbNote = new JLabel(String.format("Personal Best: %.1f WPM", previousPbWpm), SwingConstants.CENTER);
+            pbNote.setAlignmentX(Component.CENTER_ALIGNMENT);
             pbNote.setForeground(ThemeManager.fgMuted());
-            header.add(pbNote, BorderLayout.CENTER);
+            header.add(pbNote);
         }
+
+        if (reward != null && reward.xpGained > 0) {
+            JLabel xpBadge = new JLabel("+" + reward.xpGained + " XP Earned" +
+                    (reward.goalCompleted ? " · 🎯 Daily Goal Completed!" : "") +
+                    (reward.currentStreak > 1 ? " · 🔥 " + reward.currentStreak + " Day Streak" : ""), SwingConstants.CENTER);
+            xpBadge.setAlignmentX(Component.CENTER_ALIGNMENT);
+            xpBadge.setFont(xpBadge.getFont().deriveFont(Font.BOLD, 13f));
+            xpBadge.setForeground(ThemeManager.accent());
+            header.add(Box.createVerticalStrut(2));
+            header.add(xpBadge);
+        }
+
         root.add(header, BorderLayout.NORTH);
 
         // Grid of stats
@@ -55,24 +91,44 @@ public class TypingResultDialog extends JDialog {
 
         root.add(grid, BorderLayout.CENTER);
 
-        // Bottom: Unlocked Achievements + Buttons
+        // Bottom: Unlocked Achievements / Completed Challenges + Buttons
         JPanel bottom = new JPanel(new BorderLayout(8, 8));
         bottom.setOpaque(false);
 
-        if (newlyUnlocked != null && !newlyUnlocked.isEmpty()) {
-            JPanel achPanel = new JPanel();
-            achPanel.setLayout(new BoxLayout(achPanel, BoxLayout.Y_AXIS));
-            achPanel.setOpaque(false);
+        JPanel notices = new JPanel();
+        notices.setLayout(new BoxLayout(notices, BoxLayout.Y_AXIS));
+        notices.setOpaque(false);
+
+        if (reward != null && reward.completedChallenges != null && !reward.completedChallenges.isEmpty()) {
+            JLabel chTitle = new JLabel("Missions Completed:");
+            chTitle.setFont(chTitle.getFont().deriveFont(Font.BOLD, 13f));
+            chTitle.setForeground(ThemeManager.accent());
+            notices.add(chTitle);
+            for (UserChallenge uc : reward.completedChallenges) {
+                JLabel l = new JLabel("  🎯 " + uc.challenge.title + " (+" + uc.challenge.xpReward + " XP)");
+                l.setForeground(ThemeManager.fgPrimary());
+                notices.add(l);
+            }
+            notices.add(Box.createVerticalStrut(4));
+        }
+
+        List<Achievement> achs = (reward != null && reward.newlyUnlocked != null && !reward.newlyUnlocked.isEmpty())
+                ? reward.newlyUnlocked : newlyUnlocked;
+
+        if (achs != null && !achs.isEmpty()) {
             JLabel achTitle = new JLabel("Achievements Unlocked:");
             achTitle.setFont(achTitle.getFont().deriveFont(Font.BOLD, 13f));
             achTitle.setForeground(ThemeManager.accent());
-            achPanel.add(achTitle);
-            for (Achievement a : newlyUnlocked) {
+            notices.add(achTitle);
+            for (Achievement a : achs) {
                 JLabel l = new JLabel("  " + (a.icon != null ? a.icon : "🏆") + " " + a.title + " (+" + a.xp + " XP)");
                 l.setForeground(ThemeManager.fgPrimary());
-                achPanel.add(l);
+                notices.add(l);
             }
-            bottom.add(achPanel, BorderLayout.NORTH);
+        }
+
+        if (notices.getComponentCount() > 0) {
+            bottom.add(notices, BorderLayout.NORTH);
         }
 
         JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));

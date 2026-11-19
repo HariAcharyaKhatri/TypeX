@@ -26,6 +26,10 @@ public class AchievementDAO {
                         a.icon = rs.getString("icon");
                         a.xp = rs.getInt("xp");
                         a.unlocked = rs.getInt("unlocked") == 1;
+                        try {
+                            String cat = rs.getString("category");
+                            if (cat != null && !cat.isEmpty()) a.category = cat;
+                        } catch (SQLException ignored) {}
                         out.add(a);
                     }
                 }
@@ -68,6 +72,10 @@ public class AchievementDAO {
                     a.description = rs.getString("description");
                     a.icon = rs.getString("icon");
                     a.xp = rs.getInt("xp");
+                    try {
+                        String cat = rs.getString("category");
+                        if (cat != null && !cat.isEmpty()) a.category = cat;
+                    } catch (SQLException ignored) {}
                     return a;
                 }
             } catch (SQLException e) {

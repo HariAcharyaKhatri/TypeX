@@ -218,4 +218,45 @@ public class DatabasePersistenceTest {
 
         userDao.delete(u.id);
     }
+
+    @Test
+    @Order(8)
+    void phase3GamificationTablesPersistence() {
+        UserDAO userDao = new UserDAO();
+        UserXPDAO xpDao = new UserXPDAO();
+        PracticeStreakDAO streakDao = new PracticeStreakDAO();
+        DailyGoalDAO goalDao = new DailyGoalDAO();
+        UserPreferenceDAO prefDao = new UserPreferenceDAO();
+
+        User u = userDao.create("GamifyDbTester_" + System.currentTimeMillis());
+
+        // 1. XP
+        UserXP xp = xpDao.getForUser(u.id);
+        assertEquals(0, xp.totalXp);
+        assertEquals(1, xp.level);
+
+        UserXPDAO.XPResult res = xpDao.addXP(u.id, 150);
+        assertEquals(150, res.newXp);
+        assertEquals(2, res.newLevel);
+
+        // 2. Practice Streak
+        PracticeStreak streak = streakDao.getForUser(u.id);
+        assertEquals(0, streak.currentStreak);
+
+        PracticeStreakDAO.StreakUpdateResult sRes = streakDao.recordQualifyingActivity(u.id);
+        assertEquals(1, sRes.currentStreak);
+
+        // 3. Daily Goal
+        UserPreference pref = prefDao.getForUser(u.id);
+        DailyGoal dg = goalDao.getOrCreateToday(u.id, pref);
+        assertNotNull(dg);
+        assertEquals(pref.dailyGoalMinutes, dg.targetMinutes);
+
+        // 4. Preferences
+        pref.dailyGoalMinutes = 40;
+        prefDao.save(pref);
+        assertEquals(40, prefDao.getForUser(u.id).dailyGoalMinutes);
+
+        userDao.delete(u.id);
+    }
 }

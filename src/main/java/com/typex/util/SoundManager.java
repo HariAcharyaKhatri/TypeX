@@ -50,6 +50,13 @@ public final class SoundManager {
         playTone(1046, 160, volume / 100.0 * 0.4, 50);
     }
 
+    public static void levelUp() {
+        playTone(523, 70, volume / 100.0 * 0.4);
+        playTone(659, 70, volume / 100.0 * 0.4, 60);
+        playTone(784, 80, volume / 100.0 * 0.4, 120);
+        playTone(1046, 200, volume / 100.0 * 0.4, 180);
+    }
+
     private static void playTone(int hz, int ms, double gain) {
         playTone(hz, ms, gain, 0);
     }

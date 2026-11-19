@@ -187,6 +187,85 @@ public final class DatabaseInitializer {
                       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
                     )""");
 
+                // --- PHASE 3 TABLES ---
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS user_xp (
+                      user_id INTEGER PRIMARY KEY,
+                      total_xp INTEGER DEFAULT 0,
+                      level INTEGER DEFAULT 1,
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS practice_streaks (
+                      user_id INTEGER PRIMARY KEY,
+                      current_streak INTEGER DEFAULT 0,
+                      longest_streak INTEGER DEFAULT 0,
+                      last_practice_date TEXT,
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS daily_goals (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER NOT NULL,
+                      date TEXT NOT NULL,
+                      target_minutes INTEGER DEFAULT 15,
+                      target_tests INTEGER DEFAULT 3,
+                      target_lessons INTEGER DEFAULT 1,
+                      target_accuracy REAL DEFAULT 95.0,
+                      completed_seconds INTEGER DEFAULT 0,
+                      completed_tests INTEGER DEFAULT 0,
+                      completed_lessons INTEGER DEFAULT 0,
+                      achieved INTEGER DEFAULT 0,
+                      reward_claimed INTEGER DEFAULT 0,
+                      UNIQUE(user_id, date),
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS challenges (
+                      id TEXT PRIMARY KEY,
+                      type TEXT NOT NULL,
+                      title TEXT NOT NULL,
+                      description TEXT NOT NULL,
+                      requirement_type TEXT NOT NULL,
+                      target_value REAL NOT NULL,
+                      xp_reward INTEGER NOT NULL,
+                      start_date TEXT NOT NULL,
+                      end_date TEXT NOT NULL
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS user_challenges (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER NOT NULL,
+                      challenge_id TEXT NOT NULL,
+                      current_progress REAL DEFAULT 0,
+                      completed INTEGER DEFAULT 0,
+                      reward_claimed INTEGER DEFAULT 0,
+                      completed_at TEXT,
+                      UNIQUE(user_id, challenge_id),
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                      FOREIGN KEY(challenge_id) REFERENCES challenges(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS user_preferences (
+                      user_id INTEGER PRIMARY KEY,
+                      daily_goal_minutes INTEGER DEFAULT 15,
+                      daily_goal_tests INTEGER DEFAULT 3,
+                      daily_goal_lessons INTEGER DEFAULT 1,
+                      daily_goal_accuracy REAL DEFAULT 95.0,
+                      preferred_duration INTEGER DEFAULT 60,
+                      preferred_category TEXT DEFAULT 'Common English',
+                      sound_enabled INTEGER DEFAULT 1,
+                      volume INTEGER DEFAULT 70,
+                      level_up_alerts INTEGER DEFAULT 1,
+                      achievement_alerts INTEGER DEFAULT 1,
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
                 // Indexes
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_results_user ON typing_test_results(user_id)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_results_date ON typing_test_results(completed_at)");
@@ -196,9 +275,11 @@ public final class DatabaseInitializer {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_char_errors_user ON character_errors(user_id)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_keyboard_user ON keyboard_sessions(user_id)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pb_user_cat ON personal_bests(user_id, category, duration_seconds)");
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_daily_goals_user_date ON daily_goals(user_id, date)");
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_user_challenges_user ON user_challenges(user_id)");
             }
 
-            // Migrations: Alter tables to add new Phase 2 columns if not present
+            // Migrations: Alter tables to add new Phase 2 & 3 columns if not present
             applyMigrations(c);
 
             // Seed lessons & achievements
@@ -231,6 +312,20 @@ public final class DatabaseInitializer {
             }
             if (!resultCols.contains("raw_keystrokes")) {
                 st.executeUpdate("ALTER TABLE typing_test_results ADD COLUMN raw_keystrokes INTEGER DEFAULT 0");
+            }
+        }
+
+        // Migration for achievements: category column
+        Set<String> achCols = new HashSet<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(achievements)")) {
+            while (rs.next()) {
+                achCols.add(rs.getString("name").toLowerCase());
+            }
+        }
+        if (!achCols.contains("category")) {
+            try (Statement st = c.createStatement()) {
+                st.executeUpdate("ALTER TABLE achievements ADD COLUMN category TEXT DEFAULT 'General'");
             }
         }
     }
@@ -376,36 +471,77 @@ public final class DatabaseInitializer {
     }
 
     private static void seedAchievements(Connection c) throws SQLException {
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM achievements")) {
-            if (rs.next() && rs.getInt(1) > 0) return;
-        }
         Object[][] rows = {
-                {"FIRST_TEST", "First Test", "Complete your first typing test", 50, "🏁"},
-                {"FIRST_LESSON", "First Lesson", "Complete your first lesson", 50, "📚"},
-                {"WPM_20", "20 WPM Club", "Reach 20 WPM in a test", 100, "🥉"},
-                {"WPM_30", "30 WPM Club", "Reach 30 WPM", 150, "🥈"},
-                {"WPM_40", "40 WPM Club", "Reach 40 WPM", 200, "🥇"},
-                {"WPM_50", "50 WPM Club", "Reach 50 WPM", 250, "🏅"},
-                {"WPM_70", "70 WPM Club", "Reach 70 WPM", 400, "🎖"},
-                {"WPM_100", "100 WPM Club", "Reach 100 WPM", 600, "🏆"},
-                {"PERFECT_ACCURACY", "Perfect Accuracy", "Complete a test with 100% accuracy", 200, "💎"},
-                {"LESSONS_10", "10 Lessons Completed", "Complete 10 lessons", 200, "📖"},
-                {"LESSONS_ALL", "Master Typist", "Complete all 20 curriculum lessons", 1000, "🎓"},
-                {"TESTS_100", "100 Tests Completed", "Complete 100 tests", 500, "🎯"},
-                {"STREAK_7", "7-Day Streak", "Practice 7 days in a row", 150, "🔥"},
-                {"STREAK_30", "30-Day Streak", "Practice 30 days in a row", 400, "🔥"},
-                {"CONSISTENCY_90", "Rhythm Master", "Reach 90% typing consistency in a test", 250, "⚡"}
+                // Code, Title, Description, XP, Icon, Category
+                // Speed
+                {"FIRST_TEST", "First Test", "Complete your first typing test", 50, "🏁", "Speed"},
+                {"WPM_20", "20 WPM Club", "Reach 20 WPM in a test", 100, "🥉", "Speed"},
+                {"WPM_30", "30 WPM Club", "Reach 30 WPM", 150, "🥈", "Speed"},
+                {"WPM_40", "40 WPM Club", "Reach 40 WPM", 200, "🥇", "Speed"},
+                {"WPM_50", "50 WPM Club", "Reach 50 WPM", 250, "🏅", "Speed"},
+                {"WPM_60", "60 WPM Pro", "Reach 60 WPM in a typing test", 300, "⚡", "Speed"},
+                {"WPM_70", "70 WPM Club", "Reach 70 WPM", 400, "🎖", "Speed"},
+                {"WPM_80", "80 WPM Elite", "Reach 80 WPM in a typing test", 450, "🚀", "Speed"},
+                {"WPM_100", "100 WPM Club", "Reach 100 WPM", 600, "🏆", "Speed"},
+                {"WPM_120", "Speed Demon", "Reach 120 WPM in a typing test", 800, "☄️", "Speed"},
+                {"TESTS_100", "100 Tests Completed", "Complete 100 tests", 500, "🎯", "Speed"},
+
+                // Accuracy
+                {"ACCURACY_95", "Sharp Shooter", "Complete a test with at least 95% accuracy", 100, "🎯", "Accuracy"},
+                {"ACCURACY_98", "Sniper Typist", "Complete a test with at least 98% accuracy", 250, "🏹", "Accuracy"},
+                {"PERFECT_ACCURACY", "Perfect Accuracy", "Complete a test with 100% accuracy", 200, "💎", "Accuracy"},
+                {"ZERO_BACKSPACES", "Flawless Keystrokes", "Complete a test with zero backspaces", 300, "✨", "Accuracy"},
+
+                // Consistency
+                {"CONSISTENCY_80", "Steady Hands", "Reach 80% typing consistency in a test", 150, "⏱️", "Consistency"},
+                {"CONSISTENCY_90", "Rhythm Master", "Reach 90% typing consistency in a test", 250, "⚡", "Consistency"},
+                {"CONSISTENCY_95", "Metronome", "Reach 95% typing consistency in a test", 400, "🎵", "Consistency"},
+
+                // Learning
+                {"FIRST_LESSON", "First Lesson", "Complete your first lesson", 50, "📚", "Learning"},
+                {"LESSONS_5", "Dedicated Student", "Complete 5 curriculum lessons", 100, "📗", "Learning"},
+                {"LESSONS_10", "10 Lessons Completed", "Complete 10 lessons", 200, "📖", "Learning"},
+                {"LESSONS_BEGINNER", "Beginner Graduate", "Pass all Level 1 Beginner lessons", 200, "🌱", "Learning"},
+                {"LESSONS_PRO", "Virtuoso Graduate", "Pass all Level 5 Professional lessons", 600, "🌟", "Learning"},
+                {"LESSONS_ALL", "Master Typist", "Complete all 20 curriculum lessons", 1000, "🎓", "Learning"},
+
+                // Practice Time
+                {"TIME_15M", "Warm Up", "Accumulate 15 minutes of total practice time", 50, "⏳", "Practice Time"},
+                {"TIME_1H", "Hour of Power", "Accumulate 1 hour of total practice time", 200, "🕰️", "Practice Time"},
+                {"TIME_5H", "Iron Fingers", "Accumulate 5 hours of total practice time", 500, "🛡️", "Practice Time"},
+
+                // Streak
+                {"STREAK_3", "Habit Former", "Practice 3 days in a row", 75, "🔥", "Streak"},
+                {"STREAK_7", "7-Day Streak", "Practice 7 days in a row", 150, "🔥", "Streak"},
+                {"STREAK_14", "Two-Week Triumph", "Practice 14 days in a row", 250, "🔥", "Streak"},
+                {"STREAK_30", "30-Day Streak", "Practice 30 days in a row", 400, "🔥", "Streak"},
+
+                // Keyboard Mastery
+                {"KEYBOARD_FIRST_DRILL", "Touch Explorer", "Complete your first keyboard trainer drill", 50, "⌨️", "Keyboard Mastery"},
+                {"KEYBOARD_5_DRILLS", "Keyboard Artisan", "Complete 5 keyboard trainer sessions", 200, "🎹", "Keyboard Mastery"},
+                {"ACCURACY_HIGH_SPEED", "Speed & Precision", "Achieve 50+ WPM with 98%+ accuracy", 350, "👑", "Keyboard Mastery"}
         };
+
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO achievements(code,title,description,xp,icon) VALUES(?,?,?,?,?)")) {
+                "INSERT OR IGNORE INTO achievements(code,title,description,xp,icon,category) VALUES(?,?,?,?,?,?)")) {
             for (Object[] r : rows) {
                 ps.setString(1, (String) r[0]);
                 ps.setString(2, (String) r[1]);
                 ps.setString(3, (String) r[2]);
                 ps.setInt(4, (Integer) r[3]);
                 ps.setString(5, (String) r[4]);
+                ps.setString(6, (String) r[5]);
                 ps.executeUpdate();
+            }
+        }
+
+        // Update category for any previously inserted achievements
+        try (PreparedStatement up = c.prepareStatement(
+                "UPDATE achievements SET category=? WHERE code=? AND (category IS NULL OR category='General')")) {
+            for (Object[] r : rows) {
+                up.setString(1, (String) r[5]);
+                up.setString(2, (String) r[0]);
+                up.executeUpdate();
             }
         }
     }
