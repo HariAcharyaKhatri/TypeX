@@ -36,6 +36,7 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
 
     private final VirtualKeyboard keyboard = new VirtualKeyboard();
     private final JComboBox<String> drillSelector = new JComboBox<>(DRILLS);
+    private final JComboBox<String> layoutSelector = new JComboBox<>(com.typex.util.KeyboardLayout.LAYOUT_NAMES);
     private final JLabel promptLabel = new JLabel("Press Key: -");
     private final JLabel fingerInstruction = new JLabel("Finger: -");
     private final JLabel scoreLabel = new JLabel("Accuracy: 100%");
@@ -64,6 +65,17 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
         top.add(new JLabel("Drill Mode:"));
         drillSelector.addActionListener(e -> updateDrillPool());
         top.add(drillSelector);
+
+        top.add(new JLabel("Layout:"));
+        layoutSelector.addActionListener(e -> {
+            String lName = (String) layoutSelector.getSelectedItem();
+            if (lName != null) {
+                keyboard.setLayoutInfo(com.typex.util.KeyboardLayout.getLayout(lName));
+                nextTargetKey();
+                requestFocusInWindow();
+            }
+        });
+        top.add(layoutSelector);
 
         heatmapToggle.setFocusPainted(false);
         heatmapToggle.addActionListener(e -> toggleHeatmap());
@@ -223,7 +235,7 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
         keyPresentedNanos = System.nanoTime();
 
         promptLabel.setText("Press Key: '" + Character.toUpperCase(currentTargetKey) + "'");
-        fingerInstruction.setText("👉 " + VirtualKeyboard.getFingerInstruction(currentTargetKey));
+        fingerInstruction.setText("👉 " + keyboard.getFingerInstruction(currentTargetKey));
     }
 
     private void handleKeyInput(char c) {
@@ -310,6 +322,25 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
 
     @Override
     public void refresh() {
+        if (frame.getUser() != null) {
+            new SwingWorker<com.typex.model.UserPreference, Void>() {
+                @Override
+                protected com.typex.model.UserPreference doInBackground() {
+                    return new com.typex.dao.UserPreferenceDAO().getForUser(frame.getUser().id);
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        com.typex.model.UserPreference up = get();
+                        if (up != null && up.keyboardLayout != null) {
+                            layoutSelector.setSelectedItem(up.keyboardLayout);
+                            keyboard.setLayoutInfo(com.typex.util.KeyboardLayout.getLayout(up.keyboardLayout));
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }.execute();
+        }
         SwingUtilities.invokeLater(this::requestFocusInWindow);
     }
 }

@@ -10,14 +10,14 @@ public class StatCard extends JPanel {
     private final JLabel titleLabel = new JLabel();
 
     public StatCard(String title, String value) {
-        setLayout(new BorderLayout());
-        setPreferredSize(new Dimension(180, 90));
+        setLayout(new BorderLayout(4, 6));
+        setPreferredSize(new Dimension(180, 88));
 
         titleLabel.setText(title);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        titleLabel.setFont(ThemeManager.getTitleFont(11.5f));
 
         valueLabel.setText(value);
-        valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 24f));
+        valueLabel.setFont(ThemeManager.getTitleFont(22f));
 
         add(titleLabel, BorderLayout.NORTH);
         add(valueLabel, BorderLayout.CENTER);
@@ -27,8 +27,8 @@ public class StatCard extends JPanel {
     public void applyTheme() {
         setBackground(ThemeManager.bgCard());
         setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x2E2E2E) : new Color(0xE5E7EB)),
-                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+                BorderFactory.createLineBorder(ThemeManager.borderColor(), 1),
+                BorderFactory.createEmptyBorder(12, 16, 12, 16)));
         titleLabel.setForeground(ThemeManager.fgMuted());
         valueLabel.setForeground(ThemeManager.accent());
         repaint();

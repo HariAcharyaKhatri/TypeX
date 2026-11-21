@@ -1,91 +1,180 @@
 package com.typex.ui.components;
 
 import com.typex.config.ThemeManager;
+import com.typex.util.KeyboardLayout;
+import com.typex.util.KeyboardLayout.Finger;
+import com.typex.util.KeyboardLayout.KeyDef;
+import com.typex.util.KeyboardLayout.LayoutInfo;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.List;
 
+/**
+ * Full-Size, Proportional Virtual Keyboard for TYPEX.
+ * Adapts to available width, supports dynamic layouts, finger guidance,
+ * shifted modifiers, heatmaps, and realistic physical key styling.
+ */
 public class VirtualKeyboard extends JPanel {
-    private static final String[] ROWS = {
-            "`1234567890-=",
-            "qwertyuiop[]\\",
-            "asdfghjkl;'",
-            "zxcvbnm,./"
-    };
+    private LayoutInfo activeLayout;
+    private final Map<String, KeyComponent> keyComponentsById = new HashMap<>();
+    private final Map<Character, KeyComponent> keyComponentsByChar = new HashMap<>();
+    private KeyComponent leftShiftKey;
+    private KeyComponent rightShiftKey;
+    private KeyComponent spaceKey;
 
-    private static final Map<Character, String> FINGER_NAMES = new HashMap<>();
-    private static final Map<Character, Color> FINGER_COLORS = new HashMap<>();
-
-    static {
-        // Finger color definitions
-        Color leftPinky = new Color(0xF87171);
-        Color leftRing = new Color(0xFB923C);
-        Color leftMiddle = new Color(0xFBBF24);
-        Color leftIndex = new Color(0x34D399);
-        Color rightIndex = new Color(0x60A5FA);
-        Color rightMiddle = new Color(0x818CF8);
-        Color rightRing = new Color(0xA78BFA);
-        Color rightPinky = new Color(0xF472B6);
-
-        assignFinger("`1qaz", "Left Pinky Finger", leftPinky);
-        assignFinger("2wsx", "Left Ring Finger", leftRing);
-        assignFinger("3edc", "Left Middle Finger", leftMiddle);
-        assignFinger("45rtfgvb", "Left Index Finger", leftIndex);
-        assignFinger("67yuhjnm", "Right Index Finger", rightIndex);
-        assignFinger("8ik,", "Right Middle Finger", rightMiddle);
-        assignFinger("9ol.", "Right Ring Finger", rightRing);
-        assignFinger("0-=[]\\;'/p", "Right Pinky Finger", rightPinky);
-        FINGER_NAMES.put(' ', "Both Thumbs (Spacebar)");
-    }
-
-    private static void assignFinger(String keys, String name, Color c) {
-        for (char ch : keys.toCharArray()) {
-            FINGER_NAMES.put(ch, name);
-            FINGER_COLORS.put(ch, c);
-        }
-    }
-
-    private final Map<Character, JButton> keys = new HashMap<>();
-    private char highlight = 0;
+    private char activeHighlight = 0;
     private boolean heatmapMode = false;
     private Map<Character, Integer> errorCounts = new HashMap<>();
 
     public VirtualKeyboard() {
+        this(KeyboardLayout.getLayout("US_QWERTY"));
+    }
+
+    public VirtualKeyboard(LayoutInfo layout) {
+        this.activeLayout = layout != null ? layout : KeyboardLayout.getLayout("US_QWERTY");
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-
-        for (String row : ROWS) {
-            JPanel rp = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 4));
-            rp.setOpaque(false);
-            for (char ch : row.toCharArray()) {
-                JButton b = makeKey(ch);
-                keys.put(ch, b);
-                rp.add(b);
-            }
-            add(rp);
-        }
-        JPanel spaceRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 4));
-        spaceRow.setOpaque(false);
-        JButton space = makeKey(' ');
-        space.setPreferredSize(new Dimension(320, 36));
-        space.setText("space");
-        keys.put(' ', space);
-        spaceRow.add(space);
-        add(spaceRow);
-
+        setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        setOpaque(false);
+        buildKeyboardUI();
         applyTheme();
     }
 
+    public void setKeyboardLayout(LayoutInfo layout) {
+        if (layout == null || layout == this.activeLayout) return;
+        this.activeLayout = layout;
+        buildKeyboardUI();
+        applyTheme();
+    }
+
+    public void setLayoutInfo(LayoutInfo layout) {
+        setKeyboardLayout(layout);
+    }
+
+    public LayoutInfo getKeyboardLayout() {
+        return activeLayout;
+    }
+
+    private void buildKeyboardUI() {
+        removeAll();
+        keyComponentsById.clear();
+        keyComponentsByChar.clear();
+        leftShiftKey = null;
+        rightShiftKey = null;
+        spaceKey = null;
+
+        for (List<KeyDef> rowDefs : activeLayout.rows) {
+            JPanel rowPanel = new KeyboardRowPanel();
+            rowPanel.setLayout(new BoxLayout(rowPanel, BoxLayout.X_AXIS));
+            rowPanel.setOpaque(false);
+
+            for (KeyDef def : rowDefs) {
+                KeyComponent comp = new KeyComponent(def);
+                keyComponentsById.put(def.id, comp);
+
+                if ("LSHIFT".equalsIgnoreCase(def.id)) leftShiftKey = comp;
+                if ("RSHIFT".equalsIgnoreCase(def.id)) rightShiftKey = comp;
+                if ("SPACE".equalsIgnoreCase(def.id)) spaceKey = comp;
+
+                if (def.primary != null && def.primary.length() == 1) {
+                    char p = def.primary.charAt(0);
+                    keyComponentsByChar.put(Character.toLowerCase(p), comp);
+                    keyComponentsByChar.put(Character.toUpperCase(p), comp);
+                }
+                if (def.shifted != null && def.shifted.length() == 1) {
+                    keyComponentsByChar.put(def.shifted.charAt(0), comp);
+                }
+
+                rowPanel.add(comp);
+                rowPanel.add(Box.createHorizontalStrut(4));
+            }
+            add(rowPanel);
+            add(Box.createVerticalStrut(4));
+        }
+
+        revalidate();
+        repaint();
+    }
+
     public static String getFingerInstruction(char c) {
-        char lower = Character.toLowerCase(c);
-        return FINGER_NAMES.getOrDefault(lower, "Target Finger: Any Free Finger");
+        if (c == ' ') return "Both Thumbs (Spacebar)";
+        LayoutInfo layout = KeyboardLayout.getLayout("US_QWERTY");
+        Finger f = layout != null ? layout.getFingerForChar(c) : null;
+        if (f == null) return "Target Finger: Any Free Finger";
+        boolean shifted = layout.requiresShift(c);
+        String shiftNote = "";
+        if (shifted) {
+            boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
+            shiftNote = " + " + (isLeftHand ? "Right Shift" : "Left Shift");
+        }
+        return f.displayName + shiftNote;
+    }
+
+    public String getFingerInstructionForActiveLayout(char c) {
+        if (c == ' ') return "Both Thumbs (Spacebar)";
+        if (activeLayout != null) {
+            Finger f = activeLayout.getFingerForChar(c);
+            if (f != null) {
+                boolean shifted = activeLayout.requiresShift(c);
+                String shiftNote = "";
+                if (shifted) {
+                    boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
+                    shiftNote = " + " + (isLeftHand ? "Right Shift" : "Left Shift");
+                }
+                return f.displayName + shiftNote;
+            }
+        }
+        return getFingerInstruction(c);
+    }
+
+    public void highlightKey(char ch) {
+        clearHighlights();
+        activeHighlight = ch;
+
+        if (ch == ' ') {
+            if (spaceKey != null) spaceKey.setActive(true);
+            return;
+        }
+
+        KeyComponent comp = keyComponentsByChar.get(ch);
+        if (comp == null) {
+            comp = keyComponentsByChar.get(Character.toLowerCase(ch));
+        }
+
+        if (comp != null) {
+            comp.setActive(true);
+            // Highlight shift key if required
+            if (activeLayout.requiresShift(ch)) {
+                Finger f = comp.keyDef.finger;
+                boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
+                if (isLeftHand && rightShiftKey != null) {
+                    rightShiftKey.setActive(true);
+                } else if (!isLeftHand && leftShiftKey != null) {
+                    leftShiftKey.setActive(true);
+                }
+            }
+        }
+    }
+
+    public void clearHighlights() {
+        activeHighlight = 0;
+        for (KeyComponent comp : keyComponentsById.values()) {
+            comp.setActive(false);
+        }
+    }
+
+    public void flashWrong(char ch) {
+        KeyComponent comp = keyComponentsByChar.get(ch);
+        if (comp == null) comp = keyComponentsByChar.get(Character.toLowerCase(ch));
+        if (comp != null) {
+            comp.flashError();
+        }
     }
 
     public void setHeatmapMode(boolean enabled, Map<Character, Integer> errors) {
         this.heatmapMode = enabled;
-        this.errorCounts = (errors != null) ? errors : new HashMap<>();
+        this.errorCounts = errors != null ? errors : new HashMap<>();
         applyTheme();
     }
 
@@ -94,94 +183,213 @@ public class VirtualKeyboard extends JPanel {
     }
 
     public void applyTheme() {
-        setBackground(ThemeManager.bgApp());
         int maxErrors = errorCounts.values().stream().mapToInt(Integer::intValue).max().orElse(1);
 
-        for (Map.Entry<Character, JButton> entry : keys.entrySet()) {
-            char ch = entry.getKey();
-            JButton b = entry.getValue();
-
+        for (KeyComponent comp : keyComponentsById.values()) {
             if (heatmapMode) {
-                int errs = errorCounts.getOrDefault(ch, 0);
-                if (errs == 0) {
-                    b.setBackground(ThemeManager.bgCard());
-                    b.setToolTipText(Character.toUpperCase(ch) + " (0 errors)");
-                } else {
-                    float ratio = (float) errs / Math.max(1, maxErrors);
-                    Color heat = interpolateHeat(ratio);
-                    b.setBackground(heat);
-                    b.setToolTipText(String.format("%s (%d mistakes)", Character.toUpperCase(ch), errs));
+                int errs = 0;
+                if (comp.keyDef.primary != null && comp.keyDef.primary.length() == 1) {
+                    errs = errorCounts.getOrDefault(Character.toLowerCase(comp.keyDef.primary.charAt(0)), 0);
                 }
-                b.setForeground(ThemeManager.isDark() ? Color.WHITE : Color.BLACK);
-                b.setBorder(BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x444444) : new Color(0xBBBBBB), 1));
+                comp.setHeatmapIntensity(errs, maxErrors);
             } else {
-                b.setBackground(ThemeManager.bgCard());
-                b.setForeground(ThemeManager.fgPrimary());
-                b.setToolTipText(FINGER_NAMES.getOrDefault(ch, "Key " + ch));
-                updateKeyBorder(ch, b);
+                comp.clearHeatmap();
             }
+            comp.applyTheme();
         }
 
-        if (highlight != 0) {
-            highlightKey(highlight);
+        if (activeHighlight != 0) {
+            highlightKey(activeHighlight);
         }
         repaint();
     }
 
-    private Color interpolateHeat(float ratio) {
-        if (ratio < 0.33f) {
-            return new Color(0x85, 0x76, 0x1A); // subtle gold
-        } else if (ratio < 0.66f) {
-            return new Color(0xC2, 0x64, 0x15); // amber orange
-        } else {
-            return new Color(0xB9, 0x1C, 0x1C); // crimson red
+    private static class KeyboardRowPanel extends JPanel {
+        @Override
+        public Dimension getMaximumSize() {
+            Dimension d = super.getPreferredSize();
+            d.width = Integer.MAX_VALUE;
+            return d;
         }
     }
 
-    private void updateKeyBorder(char ch, JButton b) {
-        Color finger = FINGER_COLORS.get(Character.toLowerCase(ch));
-        if (finger != null) {
-            b.setBorder(BorderFactory.createLineBorder(finger, 2));
-        } else {
-            b.setBorder(BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x333333) : new Color(0xCCCCCC), 1));
-        }
-    }
+    /**
+     * Individual realistic physical keyboard key with proportional width.
+     */
+    public static class KeyComponent extends JComponent {
+        public final KeyDef keyDef;
+        private boolean isActive = false;
+        private boolean isFlashingError = false;
+        private int heatmapCount = 0;
+        private float heatmapRatio = 0.0f;
 
-    private JButton makeKey(char ch) {
-        JButton b = new JButton(String.valueOf(ch).toUpperCase());
-        b.setPreferredSize(new Dimension(42, 40));
-        b.setFocusPainted(false);
-        b.setFocusable(false);
-        b.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
-        updateKeyBorder(ch, b);
-        return b;
-    }
-
-    public void highlightKey(char ch) {
-        char old = highlight;
-        if (old != 0 && keys.containsKey(old)) {
-            if (heatmapMode) {
-                applyTheme();
-            } else {
-                updateKeyBorder(old, keys.get(old));
-            }
+        public KeyComponent(KeyDef def) {
+            this.keyDef = def;
+            setOpaque(false);
+            setFocusable(false);
+            setToolTipText(def.finger != null ? def.finger.displayName : null);
         }
-        highlight = Character.toLowerCase(ch);
-        if (keys.containsKey(highlight)) {
-            JButton b = keys.get(highlight);
-            b.setBorder(BorderFactory.createLineBorder(ThemeManager.accent(), 3));
-        }
-    }
 
-    public void flashWrong(char ch) {
-        char c = Character.toLowerCase(ch);
-        if (keys.containsKey(c)) {
-            JButton b = keys.get(c);
-            Color orig = b.getBackground();
-            b.setBackground(new Color(0xEF4444));
-            Timer t = new Timer(180, e -> b.setBackground(orig));
+        public void setActive(boolean a) {
+            this.isActive = a;
+            repaint();
+        }
+
+        public void flashError() {
+            this.isFlashingError = true;
+            repaint();
+            javax.swing.Timer t = new javax.swing.Timer(160, e -> {
+                isFlashingError = false;
+                repaint();
+            });
             t.setRepeats(false);
             t.start();
+        }
+
+        public void setHeatmapIntensity(int count, int max) {
+            this.heatmapCount = count;
+            this.heatmapRatio = (count > 0 && max > 0) ? (float) count / max : 0.0f;
+        }
+
+        public void clearHeatmap() {
+            this.heatmapCount = 0;
+            this.heatmapRatio = 0.0f;
+        }
+
+        public void applyTheme() {
+            repaint();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            int baseKeyWidth = 46;
+            int baseKeyHeight = 44;
+            int w = (int) Math.round(baseKeyWidth * keyDef.widthMultiplier);
+            return new Dimension(w, baseKeyHeight);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            int baseKeyWidth = 34;
+            int baseKeyHeight = 36;
+            int w = (int) Math.round(baseKeyWidth * keyDef.widthMultiplier);
+            return new Dimension(w, baseKeyHeight);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            int baseKeyWidth = 80;
+            int baseKeyHeight = 52;
+            int w = (int) Math.round(baseKeyWidth * keyDef.widthMultiplier);
+            return new Dimension(w, baseKeyHeight);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            int width = getWidth();
+            int height = getHeight();
+
+            Color bg;
+            Color border;
+            Color textPrimaryColor = ThemeManager.fgPrimary();
+            Color textSecondaryColor = ThemeManager.fgMuted();
+
+            if (isFlashingError) {
+                bg = new Color(0xFEE2E2);
+                border = new Color(0xDC2626);
+                textPrimaryColor = new Color(0xDC2626);
+            } else if (isActive) {
+                bg = new Color(0xDBEAFE);
+                border = ThemeManager.accent();
+                textPrimaryColor = new Color(0x1D4ED8);
+            } else if (heatmapRatio > 0.0f) {
+                bg = interpolateHeat(heatmapRatio);
+                border = new Color(0xCBD5E1);
+                textPrimaryColor = (heatmapRatio > 0.6f) ? Color.WHITE : ThemeManager.fgPrimary();
+            } else if (keyDef.isModifier) {
+                bg = ThemeManager.isDark() ? new Color(0x1F2937) : new Color(0xF1F5F9);
+                border = ThemeManager.isDark() ? new Color(0x374151) : new Color(0xE2E8F0);
+                textPrimaryColor = ThemeManager.fgSecondary();
+            } else {
+                bg = ThemeManager.bgCard();
+                border = ThemeManager.isDark() ? new Color(0x374151) : new Color(0xE2E8F0);
+            }
+
+            // Key shadow / 3D depth effect (subtle 1px bottom bevel)
+            int arc = 8;
+            g2.setColor(ThemeManager.isDark() ? new Color(0x111827) : new Color(0xCBD5E1));
+            g2.fillRoundRect(0, 1, width, height - 1, arc, arc);
+
+            // Key surface
+            g2.setColor(bg);
+            g2.fillRoundRect(0, 0, width, height - 2, arc, arc);
+
+            // Key border
+            g2.setColor(border);
+            g2.setStroke(new BasicStroke(isActive ? 2.0f : 1.0f));
+            g2.drawRoundRect(0, 0, width - 1, height - 3, arc, arc);
+
+            // Finger indicator strip (top subtle 2.5px colored line)
+            if (keyDef.finger != null && !keyDef.isModifier && !keyDef.id.equals("SPACE")) {
+                g2.setColor(keyDef.finger.color);
+                g2.fillRect(arc / 2, 2, width - arc, 2);
+            }
+
+            // Draw labels
+            Font baseFont = getFont();
+            if (baseFont == null) baseFont = new Font("Segoe UI", Font.PLAIN, 12);
+
+            FontMetrics fm = g2.getFontMetrics(baseFont);
+
+            if (keyDef.shifted != null && !keyDef.shifted.isEmpty()) {
+                // Secondary shifted label at top
+                Font shiftFont = baseFont.deriveFont(Font.PLAIN, 10f);
+                g2.setFont(shiftFont);
+                g2.setColor(textSecondaryColor);
+                FontMetrics sfm = g2.getFontMetrics(shiftFont);
+                int sx = 6;
+                int sy = sfm.getAscent() + 4;
+                g2.drawString(keyDef.shifted, sx, sy);
+
+                // Primary label at bottom/center
+                Font priFont = baseFont.deriveFont(Font.BOLD, 13f);
+                g2.setFont(priFont);
+                g2.setColor(textPrimaryColor);
+                FontMetrics pfm = g2.getFontMetrics(priFont);
+                String priStr = keyDef.primary.toUpperCase();
+                int px = width - pfm.stringWidth(priStr) - 8;
+                int py = height - 8;
+                g2.drawString(priStr, px, py);
+            } else {
+                // Centered single label
+                Font mainFont = keyDef.isModifier
+                        ? baseFont.deriveFont(Font.PLAIN, 11f)
+                        : baseFont.deriveFont(Font.BOLD, 13f);
+                g2.setFont(mainFont);
+                g2.setColor(textPrimaryColor);
+                FontMetrics mfm = g2.getFontMetrics(mainFont);
+
+                String label = keyDef.primary != null ? keyDef.primary : keyDef.id;
+                int lx = (width - mfm.stringWidth(label)) / 2;
+                int ly = (height - 2 + mfm.getAscent() - mfm.getDescent()) / 2;
+                g2.drawString(label, Math.max(3, lx), ly);
+            }
+
+            g2.dispose();
+        }
+
+        private Color interpolateHeat(float ratio) {
+            if (ratio < 0.35f) {
+                return new Color(0xFE, 0xF3, 0xC7); // amber light
+            } else if (ratio < 0.70f) {
+                return new Color(0xFB, 0x92, 0x3C); // vivid orange
+            } else {
+                return new Color(0xEF, 0x44, 0x44); // crimson red
+            }
         }
     }
 }

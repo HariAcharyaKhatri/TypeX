@@ -14,20 +14,26 @@ public class TypingResultDialog extends JDialog {
 
     public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm,
                               List<Achievement> newlyUnlocked, Runnable onTryAgain) {
-        this(parent, r, isNewPersonalBest, previousPbWpm, null, newlyUnlocked, onTryAgain);
+        this(parent, r, isNewPersonalBest, previousPbWpm, null, newlyUnlocked, onTryAgain, null);
     }
 
     public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm,
                               GamificationService.SessionReward reward, List<Achievement> newlyUnlocked, Runnable onTryAgain) {
+        this(parent, r, isNewPersonalBest, previousPbWpm, reward, newlyUnlocked, onTryAgain, null);
+    }
+
+    public TypingResultDialog(Window parent, TypingResult r, boolean isNewPersonalBest, double previousPbWpm,
+                              GamificationService.SessionReward reward, List<Achievement> newlyUnlocked,
+                              Runnable onTryAgain, Runnable onNewTest) {
         super(parent, "Test Results", ModalityType.APPLICATION_MODAL);
         setLayout(new BorderLayout(12, 12));
-        setSize(580, 560);
+        setSize(600, 580);
         setLocationRelativeTo(parent);
         setResizable(false);
 
         JPanel root = new JPanel(new BorderLayout(12, 12));
         root.setBackground(ThemeManager.bgApp());
-        root.setBorder(BorderFactory.createEmptyBorder(18, 24, 18, 24));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
 
         // Header
         JPanel header = new JPanel();
@@ -36,7 +42,7 @@ public class TypingResultDialog extends JDialog {
 
         JLabel title = new JLabel("Test Complete!", SwingConstants.CENTER);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 24f));
+        title.setFont(ThemeManager.getTitleFont(24f));
         title.setForeground(ThemeManager.fgPrimary());
         header.add(title);
         header.add(Box.createVerticalStrut(4));
@@ -44,8 +50,8 @@ public class TypingResultDialog extends JDialog {
         if (reward != null && reward.leveledUp) {
             JLabel lvlBanner = new JLabel("🎉 LEVEL UP! You reached Level " + reward.newLevel + "! 🎉", SwingConstants.CENTER);
             lvlBanner.setAlignmentX(Component.CENTER_ALIGNMENT);
-            lvlBanner.setFont(lvlBanner.getFont().deriveFont(Font.BOLD, 16f));
-            lvlBanner.setForeground(new Color(0x10B981));
+            lvlBanner.setFont(ThemeManager.getTitleFont(15f));
+            lvlBanner.setForeground(ThemeManager.colorSuccess());
             header.add(lvlBanner);
             header.add(Box.createVerticalStrut(2));
         }
@@ -53,12 +59,13 @@ public class TypingResultDialog extends JDialog {
         if (isNewPersonalBest) {
             JLabel pbBanner = new JLabel("⭐ NEW PERSONAL BEST! ⭐", SwingConstants.CENTER);
             pbBanner.setAlignmentX(Component.CENTER_ALIGNMENT);
-            pbBanner.setFont(pbBanner.getFont().deriveFont(Font.BOLD, 15f));
-            pbBanner.setForeground(new Color(0xF59E0B));
+            pbBanner.setFont(ThemeManager.getTitleFont(15f));
+            pbBanner.setForeground(ThemeManager.colorGold());
             header.add(pbBanner);
         } else if (previousPbWpm > 0) {
             JLabel pbNote = new JLabel(String.format("Personal Best: %.1f WPM", previousPbWpm), SwingConstants.CENTER);
             pbNote.setAlignmentX(Component.CENTER_ALIGNMENT);
+            pbNote.setFont(ThemeManager.getBodyFont(13f));
             pbNote.setForeground(ThemeManager.fgMuted());
             header.add(pbNote);
         }
@@ -68,9 +75,9 @@ public class TypingResultDialog extends JDialog {
                     (reward.goalCompleted ? " · 🎯 Daily Goal Completed!" : "") +
                     (reward.currentStreak > 1 ? " · 🔥 " + reward.currentStreak + " Day Streak" : ""), SwingConstants.CENTER);
             xpBadge.setAlignmentX(Component.CENTER_ALIGNMENT);
-            xpBadge.setFont(xpBadge.getFont().deriveFont(Font.BOLD, 13f));
+            xpBadge.setFont(ThemeManager.getTitleFont(13f));
             xpBadge.setForeground(ThemeManager.accent());
-            header.add(Box.createVerticalStrut(2));
+            header.add(Box.createVerticalStrut(3));
             header.add(xpBadge);
         }
 
@@ -101,11 +108,12 @@ public class TypingResultDialog extends JDialog {
 
         if (reward != null && reward.completedChallenges != null && !reward.completedChallenges.isEmpty()) {
             JLabel chTitle = new JLabel("Missions Completed:");
-            chTitle.setFont(chTitle.getFont().deriveFont(Font.BOLD, 13f));
+            chTitle.setFont(ThemeManager.getTitleFont(13f));
             chTitle.setForeground(ThemeManager.accent());
             notices.add(chTitle);
             for (UserChallenge uc : reward.completedChallenges) {
                 JLabel l = new JLabel("  🎯 " + uc.challenge.title + " (+" + uc.challenge.xpReward + " XP)");
+                l.setFont(ThemeManager.getBodyFont(12.5f));
                 l.setForeground(ThemeManager.fgPrimary());
                 notices.add(l);
             }
@@ -117,11 +125,12 @@ public class TypingResultDialog extends JDialog {
 
         if (achs != null && !achs.isEmpty()) {
             JLabel achTitle = new JLabel("Achievements Unlocked:");
-            achTitle.setFont(achTitle.getFont().deriveFont(Font.BOLD, 13f));
-            achTitle.setForeground(ThemeManager.accent());
+            achTitle.setFont(ThemeManager.getTitleFont(13f));
+            achTitle.setForeground(ThemeManager.colorGold());
             notices.add(achTitle);
             for (Achievement a : achs) {
                 JLabel l = new JLabel("  " + (a.icon != null ? a.icon : "🏆") + " " + a.title + " (+" + a.xp + " XP)");
+                l.setFont(ThemeManager.getBodyFont(12.5f));
                 l.setForeground(ThemeManager.fgPrimary());
                 notices.add(l);
             }
@@ -134,20 +143,43 @@ public class TypingResultDialog extends JDialog {
         JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         btnBar.setOpaque(false);
 
-        JButton tryAgainBtn = new JButton("Try Again");
+        JButton tryAgainBtn = new JButton("↻ Try Again");
+        tryAgainBtn.setFont(ThemeManager.getTitleFont(13f));
         tryAgainBtn.setBackground(ThemeManager.accent());
-        tryAgainBtn.setForeground(Color.BLACK);
+        tryAgainBtn.setForeground(ThemeManager.fgOnAccent());
         tryAgainBtn.setFocusPainted(false);
+        tryAgainBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         tryAgainBtn.addActionListener(e -> {
             dispose();
             if (onTryAgain != null) onTryAgain.run();
         });
 
+        JButton newTestBtn = new JButton("New Test");
+        newTestBtn.setFont(ThemeManager.getBodyFont(13f));
+        newTestBtn.setBackground(ThemeManager.bgCard());
+        newTestBtn.setForeground(ThemeManager.fgPrimary());
+        newTestBtn.setFocusPainted(false);
+        newTestBtn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ThemeManager.borderColor()),
+                BorderFactory.createEmptyBorder(6, 12, 6, 12)));
+        newTestBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        newTestBtn.addActionListener(e -> {
+            dispose();
+            if (onNewTest != null) onNewTest.run();
+        });
+
         JButton closeBtn = new JButton("Close");
+        closeBtn.setFont(ThemeManager.getBodyFont(13f));
+        closeBtn.setBackground(ThemeManager.bgCard());
+        closeBtn.setForeground(ThemeManager.fgSecondary());
         closeBtn.setFocusPainted(false);
+        closeBtn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ThemeManager.borderColor()),
+                BorderFactory.createEmptyBorder(6, 12, 6, 12)));
         closeBtn.addActionListener(e -> dispose());
 
         btnBar.add(tryAgainBtn);
+        btnBar.add(newTestBtn);
         btnBar.add(closeBtn);
         bottom.add(btnBar, BorderLayout.SOUTH);
 
@@ -159,15 +191,15 @@ public class TypingResultDialog extends JDialog {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.setBackground(ThemeManager.bgCard());
         p.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x333333) : new Color(0xE5E7EB)),
-                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+                BorderFactory.createLineBorder(ThemeManager.borderColor()),
+                BorderFactory.createEmptyBorder(8, 14, 8, 14)));
 
         JLabel lbl = new JLabel(label);
-        lbl.setFont(lbl.getFont().deriveFont(Font.PLAIN, 12f));
+        lbl.setFont(ThemeManager.getBodyFont(12f));
         lbl.setForeground(ThemeManager.fgMuted());
 
         JLabel val = new JLabel(value);
-        val.setFont(val.getFont().deriveFont(Font.BOLD, highlight ? 18f : 16f));
+        val.setFont(ThemeManager.getTitleFont(highlight ? 18f : 16f));
         val.setForeground(highlight ? ThemeManager.accent() : ThemeManager.fgPrimary());
 
         p.add(lbl, BorderLayout.NORTH);

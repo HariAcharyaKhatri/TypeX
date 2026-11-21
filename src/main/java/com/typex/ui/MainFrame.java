@@ -61,10 +61,22 @@ public class MainFrame extends JFrame {
     }
 
     public void navigate(String key) {
+        setDistractionFree(false);
         cards.show(content, key);
         sidebar.setActive(key);
         topBar.refresh();
         refreshAll();
+    }
+
+    public void setDistractionFree(boolean active) {
+        sidebar.setVisible(!active);
+        topBar.setVisible(!active);
+        revalidate();
+        repaint();
+    }
+
+    public boolean isDistractionFree() {
+        return !sidebar.isVisible();
     }
 
     public void onThemeToggle() {

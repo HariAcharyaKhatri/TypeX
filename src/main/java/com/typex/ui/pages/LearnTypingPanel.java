@@ -188,7 +188,7 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         accLabel.setForeground(ThemeManager.accent());
 
         restartBtn.setBackground(ThemeManager.accent());
-        restartBtn.setForeground(Color.BLACK);
+        restartBtn.setForeground(ThemeManager.fgOnAccent());
 
         textPane.applyTheme();
         keyboard.applyTheme();

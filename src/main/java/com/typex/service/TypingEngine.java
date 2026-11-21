@@ -82,6 +82,7 @@ public class TypingEngine {
     // --- State & Getters ---
 
     public String getTarget() { return target; }
+    public String getOriginalText() { return target; }
     public String getTyped() { return typed.toString(); }
     public int getCursor() { return cursor; }
     public int getCorrectChars() { return correctChars; }

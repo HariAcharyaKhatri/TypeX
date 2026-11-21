@@ -8,6 +8,8 @@ public class UserPreference {
     public double dailyGoalAccuracy = 95.0;
     public int preferredDuration = 60;
     public String preferredCategory = "Common English";
+    public String keyboardLayout = "US QWERTY";
+    public int passageFontSize = 26;
     public boolean soundEnabled = true;
     public int volume = 70;
     public boolean levelUpAlerts = true;

@@ -50,6 +50,8 @@ public class ProfilePanel extends JDialog {
         JButton createBtn = new JButton("Create New");
         JButton deleteBtn = new JButton("Delete");
         JButton saveBtn = new JButton("Save & Switch");
+        saveBtn.setBackground(com.typex.config.ThemeManager.accent());
+        saveBtn.setForeground(com.typex.config.ThemeManager.fgOnAccent());
 
         createBtn.addActionListener(e -> createProfile());
         deleteBtn.addActionListener(e -> deleteProfile());

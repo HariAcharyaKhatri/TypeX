@@ -4,94 +4,178 @@ import com.typex.config.ThemeManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 public class Sidebar extends JPanel {
-    private static final String[][] ITEMS = {
-            {"dashboard", "Dashboard", "🏠"},
-            {"learn", "Learn Typing", "📚"},
+    private static final String[][] CORE_ITEMS = {
+            {"dashboard", "Dashboard", "⊞"},
             {"test", "Typing Test", "⌨"},
+            {"learn", "Learn Typing", "📖"},
+            {"keyboard", "Keyboard Trainer", "🖮"},
+            {"stats", "Statistics", "📈"}
+    };
+
+    private static final String[][] SECONDARY_ITEMS = {
             {"custom", "Custom Practice", "✎"},
             {"challenge", "Speed Challenge", "⚡"},
-            {"stats", "Statistics", "📊"},
             {"achievements", "Achievements", "🏆"},
-            {"keyboard", "Keyboard Trainer", "⌨"},
             {"settings", "Settings", "⚙"},
             {"about", "About", "ℹ"}
     };
 
     private final Consumer<String> onNavigate;
-    private final Map<String, JButton> buttons = new java.util.LinkedHashMap<>();
+    private final Map<String, NavButton> buttons = new LinkedHashMap<>();
     private final JLabel brand = new JLabel("TYPEX");
     private final JLabel tag = new JLabel("Master Every Keystroke");
+    private final JLabel coreSectionLabel = new JLabel("MAIN");
+    private final JLabel secSectionLabel = new JLabel("EXPLORE");
     private String activeKey = "dashboard";
 
     public Sidebar(Consumer<String> onNavigate) {
         this.onNavigate = onNavigate;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setPreferredSize(new Dimension(220, 0));
-        setBorder(BorderFactory.createEmptyBorder(16, 12, 16, 12));
+        setPreferredSize(new Dimension(230, 0));
 
-        brand.setFont(new Font("SansSerif", Font.BOLD, 24));
-        brand.setAlignmentX(Component.LEFT_ALIGNMENT);
-        add(brand);
+        // Brand block
+        JPanel brandPanel = new JPanel();
+        brandPanel.setLayout(new BoxLayout(brandPanel, BoxLayout.Y_AXIS));
+        brandPanel.setOpaque(false);
+        brandPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        tag.setFont(tag.getFont().deriveFont(Font.PLAIN, 11f));
-        tag.setAlignmentX(Component.LEFT_ALIGNMENT);
-        add(tag);
-        add(Box.createVerticalStrut(20));
+        brand.setFont(ThemeManager.getTitleFont(22f));
+        tag.setFont(ThemeManager.getBodyFont(11f));
+        brandPanel.add(brand);
+        brandPanel.add(Box.createVerticalStrut(2));
+        brandPanel.add(tag);
+        add(brandPanel);
+        add(Box.createVerticalStrut(24));
 
-        for (String[] it : ITEMS) {
-            JButton b = createButton(it[1], it[2]);
-            String key = it[0];
-            b.addActionListener(e -> onNavigate.accept(key));
-            buttons.put(key, b);
+        // Core section
+        coreSectionLabel.setFont(ThemeManager.getTitleFont(10.5f));
+        coreSectionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        add(coreSectionLabel);
+        add(Box.createVerticalStrut(6));
+
+        for (String[] it : CORE_ITEMS) {
+            NavButton b = createButton(it[0], it[1], it[2]);
+            buttons.put(it[0], b);
             add(b);
-            add(Box.createVerticalStrut(4));
+            add(Box.createVerticalStrut(3));
         }
+
+        add(Box.createVerticalStrut(16));
+
+        // Secondary section
+        secSectionLabel.setFont(ThemeManager.getTitleFont(10.5f));
+        secSectionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        add(secSectionLabel);
+        add(Box.createVerticalStrut(6));
+
+        for (String[] it : SECONDARY_ITEMS) {
+            NavButton b = createButton(it[0], it[1], it[2]);
+            buttons.put(it[0], b);
+            add(b);
+            add(Box.createVerticalStrut(3));
+        }
+
+        add(Box.createVerticalGlue());
 
         applyTheme();
     }
 
     public void applyTheme() {
-        Color sidebarBg = ThemeManager.isDark() ? new Color(0x0E0E0E) : Color.WHITE;
-        setBackground(sidebarBg);
+        Color bg = ThemeManager.bgCard();
+        setBackground(bg);
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 0, 1, ThemeManager.borderColor()),
+                BorderFactory.createEmptyBorder(18, 14, 18, 14)));
+
         brand.setForeground(ThemeManager.accent());
         tag.setForeground(ThemeManager.fgMuted());
+        coreSectionLabel.setForeground(ThemeManager.fgMuted());
+        secSectionLabel.setForeground(ThemeManager.fgMuted());
 
-        for (var e : buttons.entrySet()) {
-            boolean active = e.getKey().equals(activeKey);
-            JButton b = e.getValue();
-            b.setBackground(active ? ThemeManager.accent() : sidebarBg);
-            b.setForeground(active ? Color.BLACK : ThemeManager.fgPrimary());
+        for (NavButton b : buttons.values()) {
+            b.updateTheme();
         }
         repaint();
     }
 
-    private JButton createButton(String label, String icon) {
-        JButton b = new JButton(icon + "  " + label);
-        b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        b.setAlignmentX(Component.LEFT_ALIGNMENT);
-        b.setFocusPainted(false);
-        b.setBorderPainted(false);
-        b.setContentAreaFilled(false);
-        b.setOpaque(true);
-        b.setFont(b.getFont().deriveFont(Font.PLAIN, 14f));
-        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        b.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+    private NavButton createButton(String key, String label, String icon) {
+        NavButton b = new NavButton(key, label, icon);
+        b.addActionListener(e -> onNavigate.accept(key));
         return b;
     }
 
     public void setActive(String key) {
         this.activeKey = key;
-        Color sidebarBg = ThemeManager.isDark() ? new Color(0x0E0E0E) : Color.WHITE;
-        for (var e : buttons.entrySet()) {
-            boolean active = e.getKey().equals(key);
-            JButton b = e.getValue();
-            b.setBackground(active ? ThemeManager.accent() : sidebarBg);
-            b.setForeground(active ? Color.BLACK : ThemeManager.fgPrimary());
+        for (NavButton b : buttons.values()) {
+            b.updateTheme();
+        }
+    }
+
+    private class NavButton extends JButton {
+        private final String key;
+        private boolean isHovered = false;
+
+        public NavButton(String key, String label, String icon) {
+            super("  " + icon + "   " + label);
+            this.key = key;
+            setHorizontalAlignment(SwingConstants.LEFT);
+            setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+            setPreferredSize(new Dimension(200, 38));
+            setAlignmentX(Component.LEFT_ALIGNMENT);
+            setFocusPainted(false);
+            setBorderPainted(false);
+            setContentAreaFilled(false);
+            setOpaque(true);
+            setFont(ThemeManager.getBodyFont(13.5f));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    isHovered = true;
+                    updateTheme();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    isHovered = false;
+                    updateTheme();
+                }
+            });
+        }
+
+        public void updateTheme() {
+            boolean active = key.equals(activeKey);
+            if (active) {
+                setBackground(ThemeManager.accentLight());
+                setForeground(ThemeManager.accent());
+                setFont(ThemeManager.getTitleFont(13.5f));
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 3, 0, 0, ThemeManager.accent()),
+                        BorderFactory.createEmptyBorder(7, 10, 7, 12)));
+            } else if (isHovered) {
+                setBackground(ThemeManager.bgSecondary());
+                setForeground(ThemeManager.fgPrimary());
+                setFont(ThemeManager.getBodyFont(13.5f));
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 3, 0, 0, new Color(0, 0, 0, 0)),
+                        BorderFactory.createEmptyBorder(7, 10, 7, 12)));
+            } else {
+                setBackground(ThemeManager.bgCard());
+                setForeground(ThemeManager.fgSecondary());
+                setFont(ThemeManager.getBodyFont(13.5f));
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 3, 0, 0, new Color(0, 0, 0, 0)),
+                        BorderFactory.createEmptyBorder(7, 10, 7, 12)));
+            }
+            repaint();
         }
     }
 }

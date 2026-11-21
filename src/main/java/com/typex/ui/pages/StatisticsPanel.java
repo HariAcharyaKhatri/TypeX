@@ -130,7 +130,7 @@ public class StatisticsPanel extends JPanel implements MainFrame.Refreshable, Ma
         csvBtn.setBackground(ThemeManager.bgCard());
         csvBtn.setForeground(ThemeManager.fgPrimary());
         reportBtn.setBackground(ThemeManager.accent());
-        reportBtn.setForeground(Color.BLACK);
+        reportBtn.setForeground(ThemeManager.fgOnAccent());
 
         styleChart(wpmChartPanel.getChart(), true);
         styleChart(accChartPanel.getChart(), true);

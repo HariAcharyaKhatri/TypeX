@@ -263,6 +263,8 @@ public final class DatabaseInitializer {
                       volume INTEGER DEFAULT 70,
                       level_up_alerts INTEGER DEFAULT 1,
                       achievement_alerts INTEGER DEFAULT 1,
+                      keyboard_layout TEXT DEFAULT 'US QWERTY',
+                      passage_font_size INTEGER DEFAULT 26,
                       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
                     )""");
 
@@ -326,6 +328,25 @@ public final class DatabaseInitializer {
         if (!achCols.contains("category")) {
             try (Statement st = c.createStatement()) {
                 st.executeUpdate("ALTER TABLE achievements ADD COLUMN category TEXT DEFAULT 'General'");
+            }
+        }
+
+        // Migration for user_preferences: keyboard_layout and passage_font_size
+        Set<String> prefCols = new HashSet<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(user_preferences)")) {
+            while (rs.next()) {
+                prefCols.add(rs.getString("name").toLowerCase());
+            }
+        }
+        if (!prefCols.contains("keyboard_layout")) {
+            try (Statement st = c.createStatement()) {
+                st.executeUpdate("ALTER TABLE user_preferences ADD COLUMN keyboard_layout TEXT DEFAULT 'US QWERTY'");
+            }
+        }
+        if (!prefCols.contains("passage_font_size")) {
+            try (Statement st = c.createStatement()) {
+                st.executeUpdate("ALTER TABLE user_preferences ADD COLUMN passage_font_size INTEGER DEFAULT 26");
             }
         }
     }

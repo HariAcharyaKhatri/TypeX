@@ -170,7 +170,7 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
         titleField.setCaretColor(ThemeManager.accent());
 
         startBtn.setBackground(ThemeManager.accent());
-        startBtn.setForeground(Color.BLACK);
+        startBtn.setForeground(ThemeManager.fgOnAccent());
         wpmLabel.setForeground(ThemeManager.accent());
         accLabel.setForeground(ThemeManager.accent());
 
