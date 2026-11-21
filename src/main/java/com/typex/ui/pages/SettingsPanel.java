@@ -83,6 +83,7 @@ public class SettingsPanel extends JPanel implements MainFrame.Refreshable, Main
         addRow("Master Volume:", volume, gc, y++);
 
         applyBtn.setFont(ThemeManager.getTitleFont(14f));
+        applyBtn.setIcon(com.typex.util.IconManager.getIcon("check", 16, ThemeManager.fgOnAccent()));
         applyBtn.setFocusPainted(false);
         applyBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         applyBtn.addActionListener(e -> apply());

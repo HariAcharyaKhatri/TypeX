@@ -20,6 +20,9 @@ public class MainFrame extends JFrame {
 
     public MainFrame() {
         super("TYPEX — Master Every Keystroke");
+        try {
+            setIconImages(com.typex.util.IconManager.getAppIconImages());
+        } catch (Exception ignored) {}
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1280, 820);
         setMinimumSize(new Dimension(1024, 680));
@@ -51,6 +54,7 @@ public class MainFrame extends JFrame {
         content.add(new DashboardPanel(this), "dashboard");
         content.add(new LearnTypingPanel(this), "learn");
         content.add(new TypingTestPanel(this), "test");
+        content.add(new GamesPanel(this), "games");
         content.add(new CustomPracticePanel(this), "custom");
         content.add(new ChallengePanel(this), "challenge");
         content.add(new StatisticsPanel(this), "stats");

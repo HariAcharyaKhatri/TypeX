@@ -5,6 +5,8 @@ import com.typex.model.Achievement;
 import com.typex.service.AchievementService;
 import com.typex.ui.MainFrame;
 
+import com.typex.util.IconManager;
+
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -118,8 +120,8 @@ public class AchievementsPanel extends JPanel implements MainFrame.Refreshable, 
         JPanel cardHeader = new JPanel(new BorderLayout());
         cardHeader.setOpaque(false);
 
-        JLabel icon = new JLabel(a.icon == null ? "🏆" : a.icon, SwingConstants.CENTER);
-        icon.setFont(icon.getFont().deriveFont(32f));
+        Color iconColor = a.unlocked ? ThemeManager.colorWarning() : ThemeManager.fgMuted();
+        JLabel icon = new JLabel(IconManager.getIcon("trophy", 32, iconColor), SwingConstants.CENTER);
         cardHeader.add(icon, BorderLayout.CENTER);
 
         JLabel catBadge = new JLabel(a.category != null ? a.category : "General", SwingConstants.RIGHT);
@@ -135,7 +137,8 @@ public class AchievementsPanel extends JPanel implements MainFrame.Refreshable, 
                 SwingConstants.CENTER);
         desc.setForeground(ThemeManager.fgMuted());
 
-        JLabel xp = new JLabel((a.unlocked ? "✓ Unlocked · " : "🔒 Locked · ") + "+" + a.xp + " XP", SwingConstants.CENTER);
+        JLabel xp = new JLabel((a.unlocked ? "Unlocked · " : "Locked · ") + "+" + a.xp + " XP", SwingConstants.CENTER);
+        xp.setIcon(IconManager.getIcon(a.unlocked ? "check" : "lock", 13, a.unlocked ? ThemeManager.colorSuccess() : ThemeManager.fgMuted()));
         xp.setFont(xp.getFont().deriveFont(Font.BOLD, 12f));
         xp.setForeground(a.unlocked ? ThemeManager.accent() : ThemeManager.fgMuted());
 

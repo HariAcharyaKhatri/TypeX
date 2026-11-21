@@ -216,4 +216,72 @@ public class GamificationService {
 
         return reward;
     }
+
+    public SessionReward recordGameSession(int userId, GameSession session, boolean isNewPb) {
+        SessionReward reward = new SessionReward();
+        if (session == null || userId <= 0) return reward;
+
+        // Anti-exploit: minimum 10 seconds duration and 3 words completed
+        if (session.durationSeconds < 10 || session.wordsCompleted < 3) {
+            reward.currentStreak = streakDao.getForUser(userId).currentStreak;
+            reward.totalXp = userXpDao.getForUser(userId).totalXp;
+            return reward;
+        }
+
+        // Base XP derived from score and endurance
+        int earnedXp = Math.min(120, Math.max(15, (session.score / 25) + (session.durationSeconds / 2)));
+
+        if (session.accuracy >= 98.0) {
+            earnedXp += 30;
+        } else if (session.accuracy >= 95.0) {
+            earnedXp += 15;
+        }
+
+        if (isNewPb) {
+            earnedXp += 50; // New game personal best bonus
+        }
+
+        // Streak qualifying: >= 20s and >= 5 words
+        if (session.durationSeconds >= 20 && session.wordsCompleted >= 5) {
+            PracticeStreakDAO.StreakUpdateResult streakRes = streakDao.recordQualifyingActivity(userId);
+            reward.currentStreak = streakRes.currentStreak;
+            if (streakRes.continued) {
+                if (streakRes.currentStreak == 3) earnedXp += 50;
+                else if (streakRes.currentStreak == 7) earnedXp += 100;
+                else if (streakRes.currentStreak == 14) earnedXp += 200;
+                else if (streakRes.currentStreak == 30) earnedXp += 300;
+            }
+        } else {
+            reward.currentStreak = streakDao.getForUser(userId).currentStreak;
+        }
+
+        // Daily activity tracking
+        reward.completedChallenges.addAll(challengeDao.recordEvent(userId, "PRACTICE_MINUTES", session.durationSeconds / 60.0, true));
+        if (session.wpm > 0) {
+            reward.completedChallenges.addAll(challengeDao.recordEvent(userId, "MIN_WPM", session.wpm, false));
+        }
+
+        for (UserChallenge uc : reward.completedChallenges) {
+            int chXp = challengeDao.claimReward(userId, uc.challengeId);
+            if (chXp > 0) {
+                earnedXp += chXp;
+            }
+        }
+
+        reward.newlyUnlocked.addAll(achievementService.evaluateStreak(userId, reward.currentStreak));
+        for (Achievement a : reward.newlyUnlocked) {
+            earnedXp += a.xp;
+        }
+
+        // Award total XP and check Level up
+        UserXPDAO.XPResult xpRes = userXpDao.addXP(userId, earnedXp);
+        reward.xpGained = earnedXp;
+        reward.leveledUp = xpRes.leveledUp;
+        reward.oldLevel = xpRes.oldLevel;
+        reward.newLevel = xpRes.newLevel;
+        reward.totalXp = xpRes.newXp;
+
+        session.xpEarned = earnedXp;
+        return reward;
+    }
 }

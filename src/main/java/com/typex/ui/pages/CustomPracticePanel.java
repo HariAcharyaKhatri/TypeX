@@ -6,9 +6,12 @@ import com.typex.model.CustomExercise;
 import com.typex.service.TypingEngine;
 import com.typex.ui.MainFrame;
 import com.typex.ui.components.TypingTextPanel;
+import com.typex.util.IconManager;
 import com.typex.util.SoundManager;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
@@ -20,8 +23,10 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
     private final CustomExerciseDAO dao = new CustomExerciseDAO();
     private final DefaultListModel<CustomExercise> model = new DefaultListModel<>();
     private final JList<CustomExercise> list = new JList<>(model);
-    private final JTextField titleField = new JTextField(20);
+    private final JTextField titleField = new JTextField(18);
+    private final JComboBox<String> diffBox = new JComboBox<>(new String[]{"Custom", "Easy", "Normal", "Hard", "Expert"});
     private final JTextArea textArea = new JTextArea(5, 40);
+    private final JLabel countLabel = new JLabel("Chars: 0 · Words: 0");
     private final TypingTextPanel practicePane = new TypingTextPanel();
     private final JButton saveBtn = new JButton("Save");
     private final JButton deleteBtn = new JButton("Delete");
@@ -38,25 +43,45 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
 
     public CustomPracticePanel(MainFrame frame) {
         this.frame = frame;
-        setLayout(new BorderLayout(8, 8));
-        setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        setLayout(new BorderLayout(10, 10));
+        setBorder(BorderFactory.createEmptyBorder(16, 20, 16, 20));
 
         // Left: exercise list
-        list.setFont(list.getFont().deriveFont(13f));
+        list.setFont(ThemeManager.getBodyFont(13f));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> l, Object val, int index, boolean isSelected, boolean cellHasFocus) {
+                JLabel lbl = (JLabel) super.getListCellRendererComponent(l, val, index, isSelected, cellHasFocus);
+                if (val instanceof CustomExercise ce) {
+                    lbl.setText(ce.title + "  [" + (ce.difficulty != null ? ce.difficulty : "Custom") + "]");
+                    lbl.setIcon(IconManager.getIcon("custom", 14, isSelected ? ThemeManager.fgOnAccent() : ThemeManager.accent()));
+                    lbl.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+                }
+                return lbl;
+            }
+        });
+
         leftScroll = new JScrollPane(list);
-        leftScroll.setPreferredSize(new Dimension(260, 0));
-        leftScroll.setBorder(BorderFactory.createTitledBorder("My Exercises"));
+        leftScroll.setPreferredSize(new Dimension(280, 0));
+        leftScroll.setBorder(BorderFactory.createTitledBorder("My Custom Tests"));
         add(leftScroll, BorderLayout.WEST);
 
         // Center: editor & practice pane
-        JPanel center = new JPanel(new BorderLayout(6, 6));
+        JPanel center = new JPanel(new BorderLayout(8, 8));
         center.setOpaque(false);
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         top.setOpaque(false);
         top.add(new JLabel("Title:"));
         top.add(titleField);
+        top.add(new JLabel("Difficulty:"));
+        top.add(diffBox);
+
+        newBtn.setIcon(IconManager.getIcon("restart", 14, ThemeManager.fgPrimary()));
+        saveBtn.setIcon(IconManager.getIcon("check", 14, ThemeManager.fgPrimary()));
+        deleteBtn.setIcon(IconManager.getIcon("exit", 14, ThemeManager.colorError()));
+        importBtn.setIcon(IconManager.getIcon("custom", 14, ThemeManager.fgPrimary()));
 
         newBtn.addActionListener(e -> clearForm());
         saveBtn.addActionListener(e -> saveCurrent());
@@ -70,34 +95,52 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
 
         textArea.setLineWrap(true);
         textArea.setWrapStyleWord(true);
-        JScrollPane editorScroll = new JScrollPane(textArea);
-        editorScroll.setPreferredSize(new Dimension(0, 120));
-        editorScroll.setBorder(BorderFactory.createTitledBorder("Exercise Text"));
+        textArea.setFont(ThemeManager.getMonoFont(14f));
+        textArea.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) { updateCount(); }
+            @Override
+            public void removeUpdate(DocumentEvent e) { updateCount(); }
+            @Override
+            public void changedUpdate(DocumentEvent e) { updateCount(); }
+        });
 
-        JPanel editorPanel = new JPanel(new BorderLayout(4, 4));
+        JScrollPane editorScroll = new JScrollPane(textArea);
+        editorScroll.setPreferredSize(new Dimension(0, 110));
+        editorScroll.setBorder(BorderFactory.createTitledBorder("Test Content"));
+
+        JPanel countRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 2));
+        countRow.setOpaque(false);
+        countLabel.setFont(ThemeManager.getMonoFont(11f));
+        countLabel.setForeground(ThemeManager.fgMuted());
+        countRow.add(countLabel);
+
+        JPanel editorPanel = new JPanel(new BorderLayout(2, 2));
         editorPanel.setOpaque(false);
         editorPanel.add(top, BorderLayout.NORTH);
         editorPanel.add(editorScroll, BorderLayout.CENTER);
+        editorPanel.add(countRow, BorderLayout.SOUTH);
 
         center.add(editorPanel, BorderLayout.NORTH);
 
         JPanel bottom = new JPanel(new BorderLayout(4, 4));
         bottom.setOpaque(false);
 
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 4));
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 14, 4));
         buttons.setOpaque(false);
-        wpmLabel.setFont(wpmLabel.getFont().deriveFont(Font.BOLD, 15f));
-        accLabel.setFont(accLabel.getFont().deriveFont(Font.BOLD, 15f));
+        wpmLabel.setFont(ThemeManager.getMonoFont(16f));
+        accLabel.setFont(ThemeManager.getMonoFont(16f));
         buttons.add(wpmLabel);
         buttons.add(accLabel);
 
         startBtn.setFocusPainted(false);
+        startBtn.setIcon(IconManager.getIcon("play", 15, ThemeManager.fgOnAccent()));
         startBtn.addActionListener(e -> startPractice());
         buttons.add(startBtn);
         bottom.add(buttons, BorderLayout.NORTH);
 
         JScrollPane practiceScroll = new JScrollPane(practicePane);
-        practiceScroll.setBorder(BorderFactory.createLineBorder(ThemeManager.isDark() ? new Color(0x333333) : new Color(0xDDDDDD)));
+        practiceScroll.setBorder(BorderFactory.createLineBorder(ThemeManager.borderColor()));
         bottom.add(practiceScroll, BorderLayout.CENTER);
 
         center.add(bottom, BorderLayout.CENTER);
@@ -138,8 +181,8 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
                     engine.stop();
                     SoundManager.complete();
                     JOptionPane.showMessageDialog(CustomPracticePanel.this,
-                            String.format("Exercise complete!\nWPM: %.1f\nAccuracy: %.1f%%", engine.netWpm(), engine.accuracy()),
-                            "Completed", JOptionPane.INFORMATION_MESSAGE);
+                            String.format("Custom Test Complete!\nWPM: %.1f\nAccuracy: %.1f%%", engine.netWpm(), engine.accuracy()),
+                            "Test Finished", JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         });
@@ -150,11 +193,20 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
                 active = ex;
                 titleField.setText(ex.title);
                 textArea.setText(ex.text);
+                diffBox.setSelectedItem(ex.difficulty != null ? ex.difficulty : "Custom");
+                updateCount();
             }
         });
 
         applyTheme();
         refresh();
+    }
+
+    private void updateCount() {
+        String txt = textArea.getText();
+        int chars = txt.length();
+        int words = txt.isBlank() ? 0 : txt.trim().split("\\s+").length;
+        countLabel.setText(String.format("Chars: %,d · Words: %,d", chars, words));
     }
 
     @Override
@@ -169,6 +221,15 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
         titleField.setForeground(ThemeManager.fgPrimary());
         titleField.setCaretColor(ThemeManager.accent());
 
+        newBtn.setBackground(ThemeManager.bgCard());
+        newBtn.setForeground(ThemeManager.fgPrimary());
+        saveBtn.setBackground(ThemeManager.bgCard());
+        saveBtn.setForeground(ThemeManager.fgPrimary());
+        deleteBtn.setBackground(ThemeManager.bgCard());
+        deleteBtn.setForeground(ThemeManager.colorError());
+        importBtn.setBackground(ThemeManager.bgCard());
+        importBtn.setForeground(ThemeManager.fgPrimary());
+
         startBtn.setBackground(ThemeManager.accent());
         startBtn.setForeground(ThemeManager.fgOnAccent());
         wpmLabel.setForeground(ThemeManager.accent());
@@ -182,7 +243,9 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
         active = null;
         titleField.setText("");
         textArea.setText("");
+        diffBox.setSelectedIndex(0);
         list.clearSelection();
+        updateCount();
         titleField.requestFocusInWindow();
     }
 
@@ -190,16 +253,16 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
         String title = titleField.getText().trim();
         String text = textArea.getText().trim();
         if (title.isEmpty() || text.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Title and text are required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Title and text content are required.", "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        final int uid = frame.getUser().id;
+        final int uid = frame.getUser() != null ? frame.getUser().id : 1;
         final CustomExercise toSave = (active != null) ? active : new CustomExercise();
         toSave.userId = uid;
         toSave.title = title;
         toSave.text = text;
-        toSave.difficulty = "Custom";
+        toSave.difficulty = (String) diffBox.getSelectedItem();
 
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
@@ -224,7 +287,7 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
     private void deleteCurrent() {
         if (active == null) return;
         int conf = JOptionPane.showConfirmDialog(this,
-                "Delete exercise \"" + active.title + "\"?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+                "Delete custom test \"" + active.title + "\"?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
         if (conf != JOptionPane.YES_OPTION) return;
 
         final int id = active.id;
@@ -258,6 +321,7 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
                     }
                     titleField.setText(name);
                 }
+                updateCount();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Import failed: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
@@ -267,7 +331,7 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
     private void startPractice() {
         String text = textArea.getText().trim();
         if (text.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter or select exercise text to practice.", "No Text", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please enter or select test text to practice.", "No Text", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         engine = new TypingEngine(text);

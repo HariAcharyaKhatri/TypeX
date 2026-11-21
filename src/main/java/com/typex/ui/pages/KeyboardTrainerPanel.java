@@ -7,6 +7,7 @@ import com.typex.model.CharacterError;
 import com.typex.model.KeyboardSession;
 import com.typex.ui.MainFrame;
 import com.typex.ui.components.VirtualKeyboard;
+import com.typex.util.IconManager;
 import com.typex.util.SoundManager;
 
 import javax.swing.*;
@@ -42,7 +43,7 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
     private final JLabel scoreLabel = new JLabel("Accuracy: 100%");
     private final JLabel streakLabel = new JLabel("Streak: 0");
     private final JLabel reactionTimeLabel = new JLabel("Reaction: 0 ms");
-    private final JToggleButton heatmapToggle = new JToggleButton("🔥 Error Heatmap");
+    private final JToggleButton heatmapToggle = new JToggleButton("Error Heatmap");
 
     private char currentTargetKey = 'a';
     private long keyPresentedNanos = 0;
@@ -78,6 +79,7 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
         top.add(layoutSelector);
 
         heatmapToggle.setFocusPainted(false);
+        heatmapToggle.setIcon(IconManager.getIcon("flame", 14, ThemeManager.colorWarning()));
         heatmapToggle.addActionListener(e -> toggleHeatmap());
         top.add(heatmapToggle);
         add(top, BorderLayout.NORTH);

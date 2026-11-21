@@ -143,7 +143,9 @@ public class TypingResultDialog extends JDialog {
         JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         btnBar.setOpaque(false);
 
-        JButton tryAgainBtn = new JButton("↻ Try Again");
+        JButton tryAgainBtn = new JButton("Try Again");
+        tryAgainBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.RESTART, 14, ThemeManager.fgOnAccent()));
+        tryAgainBtn.setIconTextGap(6);
         tryAgainBtn.setFont(ThemeManager.getTitleFont(13f));
         tryAgainBtn.setBackground(ThemeManager.accent());
         tryAgainBtn.setForeground(ThemeManager.fgOnAccent());
@@ -155,6 +157,8 @@ public class TypingResultDialog extends JDialog {
         });
 
         JButton newTestBtn = new JButton("New Test");
+        newTestBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PLAY, 14, ThemeManager.fgPrimary()));
+        newTestBtn.setIconTextGap(6);
         newTestBtn.setFont(ThemeManager.getBodyFont(13f));
         newTestBtn.setBackground(ThemeManager.bgCard());
         newTestBtn.setForeground(ThemeManager.fgPrimary());
@@ -169,6 +173,8 @@ public class TypingResultDialog extends JDialog {
         });
 
         JButton closeBtn = new JButton("Close");
+        closeBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.EXIT, 14, ThemeManager.fgSecondary()));
+        closeBtn.setIconTextGap(6);
         closeBtn.setFont(ThemeManager.getBodyFont(13f));
         closeBtn.setBackground(ThemeManager.bgCard());
         closeBtn.setForeground(ThemeManager.fgSecondary());

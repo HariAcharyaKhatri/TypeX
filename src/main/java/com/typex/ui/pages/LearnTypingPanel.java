@@ -11,6 +11,7 @@ import com.typex.service.TypingEngine;
 import com.typex.ui.MainFrame;
 import com.typex.ui.components.TypingTextPanel;
 import com.typex.ui.components.VirtualKeyboard;
+import com.typex.util.IconManager;
 import com.typex.util.SoundManager;
 
 import javax.swing.*;
@@ -58,6 +59,20 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
         // Left sidebar: lessons list & recent attempts
         list.setFont(list.getFont().deriveFont(13f));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> l, Object val, int index, boolean isSelected, boolean cellHasFocus) {
+                JLabel lbl = (JLabel) super.getListCellRendererComponent(l, val, index, isSelected, cellHasFocus);
+                if (val instanceof LessonItem item) {
+                    lbl.setText(String.format("L%d.%d: %s", item.lesson.level, item.lesson.orderIndex, item.lesson.title));
+                    String iconKey = item.completed ? "check" : (item.unlocked ? "play" : "lock");
+                    Color iconCol = isSelected ? ThemeManager.fgOnAccent() : (item.completed ? ThemeManager.colorSuccess() : (item.unlocked ? ThemeManager.accent() : ThemeManager.fgMuted()));
+                    lbl.setIcon(IconManager.getIcon(iconKey, 14, iconCol));
+                    lbl.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+                }
+                return lbl;
+            }
+        });
         list.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && list.getSelectedValue() != null) {
                 selectLesson(list.getSelectedValue().lesson);
@@ -414,7 +429,7 @@ public class LearnTypingPanel extends JPanel implements MainFrame.Refreshable, M
 
         @Override
         public String toString() {
-            String prefix = completed ? "✓ " : (unlocked ? "▶ " : "🔒 ");
+            String prefix = completed ? "[Done] " : (unlocked ? "[Open] " : "[Locked] ");
             return prefix + "L" + lesson.level + "." + lesson.orderIndex + ": " + lesson.title;
         }
     }

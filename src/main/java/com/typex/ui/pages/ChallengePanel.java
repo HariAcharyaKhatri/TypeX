@@ -5,6 +5,7 @@ import com.typex.model.Challenge;
 import com.typex.model.UserChallenge;
 import com.typex.service.GamificationService;
 import com.typex.ui.MainFrame;
+import com.typex.util.IconManager;
 import com.typex.util.SoundManager;
 
 import javax.swing.*;
@@ -74,7 +75,8 @@ public class ChallengePanel extends JPanel implements MainFrame.Refreshable, Mai
         contentPanel.removeAll();
 
         // Daily Section
-        JLabel dailyHeader = new JLabel("🎯 Today's Daily Missions");
+        JLabel dailyHeader = new JLabel(" Today's Daily Missions");
+        dailyHeader.setIcon(IconManager.getIcon("target", 20, ThemeManager.accent()));
         dailyHeader.setFont(dailyHeader.getFont().deriveFont(Font.BOLD, 18f));
         dailyHeader.setForeground(ThemeManager.accent());
         dailyHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -104,7 +106,8 @@ public class ChallengePanel extends JPanel implements MainFrame.Refreshable, Mai
         contentPanel.add(dailyGrid);
         contentPanel.add(Box.createVerticalStrut(24));
 
-        JLabel weeklyHeader = new JLabel("⚡ Weekly Challenges");
+        JLabel weeklyHeader = new JLabel(" Weekly Challenges");
+        weeklyHeader.setIcon(IconManager.getIcon("speed", 20, ThemeManager.accent()));
         weeklyHeader.setFont(weeklyHeader.getFont().deriveFont(Font.BOLD, 18f));
         weeklyHeader.setForeground(ThemeManager.accent());
         weeklyHeader.setAlignmentX(Component.LEFT_ALIGNMENT);

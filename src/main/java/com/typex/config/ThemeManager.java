@@ -97,4 +97,12 @@ public final class ThemeManager {
     public static Font getMonospaceFont(float size) {
         return new Font("Consolas", Font.PLAIN, Math.round(size));
     }
+
+    public static Font getHeadingFont(float size) {
+        return getTitleFont(size);
+    }
+
+    public static Font getMonoFont(float size) {
+        return getMonospaceFont(size);
+    }
 }

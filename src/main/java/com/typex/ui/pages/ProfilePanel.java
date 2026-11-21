@@ -50,6 +50,9 @@ public class ProfilePanel extends JDialog {
         JButton createBtn = new JButton("Create New");
         JButton deleteBtn = new JButton("Delete");
         JButton saveBtn = new JButton("Save & Switch");
+        createBtn.setIcon(com.typex.util.IconManager.getIcon("restart", 14, com.typex.config.ThemeManager.fgPrimary()));
+        deleteBtn.setIcon(com.typex.util.IconManager.getIcon("exit", 14, com.typex.config.ThemeManager.colorError()));
+        saveBtn.setIcon(com.typex.util.IconManager.getIcon("check", 14, com.typex.config.ThemeManager.fgOnAccent()));
         saveBtn.setBackground(com.typex.config.ThemeManager.accent());
         saveBtn.setForeground(com.typex.config.ThemeManager.fgOnAccent());
 

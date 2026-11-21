@@ -268,6 +268,49 @@ public final class DatabaseInitializer {
                       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
                     )""");
 
+                // --- PHASE 5 TABLES ---
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS game_sessions (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER NOT NULL,
+                      game_type TEXT NOT NULL,
+                      score INTEGER NOT NULL,
+                      level_reached INTEGER DEFAULT 1,
+                      words_completed INTEGER DEFAULT 0,
+                      accuracy REAL DEFAULT 0,
+                      wpm REAL DEFAULT 0,
+                      duration_seconds INTEGER DEFAULT 0,
+                      xp_earned INTEGER DEFAULT 0,
+                      played_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS game_personal_bests (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER NOT NULL,
+                      game_type TEXT NOT NULL,
+                      high_score INTEGER DEFAULT 0,
+                      highest_level INTEGER DEFAULT 1,
+                      best_wpm REAL DEFAULT 0,
+                      best_accuracy REAL DEFAULT 0,
+                      achieved_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      UNIQUE(user_id, game_type),
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
+                st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS custom_typing_tests (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user_id INTEGER NOT NULL,
+                      title TEXT NOT NULL,
+                      content TEXT NOT NULL,
+                      difficulty TEXT DEFAULT 'Normal',
+                      target_duration INTEGER DEFAULT 60,
+                      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )""");
+
                 // Indexes
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_results_user ON typing_test_results(user_id)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_results_date ON typing_test_results(completed_at)");
@@ -279,6 +322,9 @@ public final class DatabaseInitializer {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pb_user_cat ON personal_bests(user_id, category, duration_seconds)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_daily_goals_user_date ON daily_goals(user_id, date)");
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_user_challenges_user ON user_challenges(user_id)");
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_game_sessions_user ON game_sessions(user_id, game_type)");
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_game_pb_user ON game_personal_bests(user_id, game_type)");
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_custom_tests_user ON custom_typing_tests(user_id)");
             }
 
             // Migrations: Alter tables to add new Phase 2 & 3 columns if not present
@@ -352,21 +398,7 @@ public final class DatabaseInitializer {
     }
 
     private static void seedLessons(Connection c) throws SQLException {
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM lesson_categories")) {
-            if (rs.next() && rs.getInt(1) > 0) {
-                // Ensure lessons have non-zero min_wpm and min_accuracy
-                try (Statement upd = c.createStatement()) {
-                    upd.executeUpdate("UPDATE lessons SET min_wpm=15, min_accuracy=90 WHERE level=1 AND min_wpm=0");
-                    upd.executeUpdate("UPDATE lessons SET min_wpm=25, min_accuracy=92 WHERE level=2 AND min_wpm=0");
-                    upd.executeUpdate("UPDATE lessons SET min_wpm=35, min_accuracy=94 WHERE level=3 AND min_wpm=0");
-                    upd.executeUpdate("UPDATE lessons SET min_wpm=45, min_accuracy=95 WHERE level=4 AND min_wpm=0");
-                    upd.executeUpdate("UPDATE lessons SET min_wpm=60, min_accuracy=97 WHERE level=5 AND min_wpm=0");
-                }
-                return;
-            }
-        }
-
+        // Ensure 5 lesson categories exist
         String[][] categories = {
                 {"Beginner", "Home row and finger positioning"},
                 {"Elementary", "Upper/lower rows and common words"},
@@ -374,88 +406,17 @@ public final class DatabaseInitializer {
                 {"Advanced", "Long paragraphs and complex words"},
                 {"Professional", "Business documents and high-speed drills"}
         };
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO lesson_categories(name,description) VALUES(?,?)")) {
-            for (String[] cat : categories) {
-                ps.setString(1, cat[0]);
-                ps.setString(2, cat[1]);
+        for (int i = 0; i < categories.length; i++) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT OR IGNORE INTO lesson_categories(id, name, description) VALUES(?, ?, ?)")) {
+                ps.setInt(1, i + 1);
+                ps.setString(2, categories[i][0]);
+                ps.setString(3, categories[i][1]);
                 ps.executeUpdate();
             }
         }
 
-        // {title, objective, instructions, practice_text, min_wpm, min_accuracy}
-        Object[][] lessons = {
-            // Level 1: Beginner
-            {"F and J Positioning", "Locate F and J home anchor keys by feel",
-             "Place left index on F (feel the bump), right index on J. Keep hands relaxed.",
-             "fff jjj fff jjj fj fj jf jf ff jj fj fff jjj", 15.0, 90.0},
-            {"Home Row Mastery", "Master ASDF and JKL; home keys",
-             "Rest fingers on ASDF JKL;. Strike keys smoothly without moving hands off the row.",
-             "asdf jkl; asdf jkl; sad lad fad ask all fall glad flash", 15.0, 90.0},
-            {"Left-Hand Drills", "Develop accuracy with left-hand fingers",
-             "Use little finger for A, ring for S, middle for D, index for F.",
-             "as as df df sad dad fad ask all fall staff daffy", 15.0, 90.0},
-            {"Right-Hand Drills", "Develop accuracy with right-hand fingers",
-             "Use index for J, middle for K, ring for L, little finger for semicolon.",
-             "jk jk kl kl lol lkj jkl; fall hall silk skill flasks", 15.0, 90.0},
-
-            // Level 2: Elementary
-            {"Upper Row: QWERTY", "Reach up from home row to the top letter row",
-             "Reach fingers up to QWERTYUIOP and return immediately to home position.",
-             "qwer uiop qwer uiop quit type power tower wire root equip", 25.0, 92.0},
-            {"Lower Row: ZXCV", "Reach down from home row to the bottom letter row",
-             "Reach fingers down to ZXCVBNM and return to home row.",
-             "zxcv bnm, zxcv bnm, maze vex car zoom van cabin mixed zinc", 25.0, 92.0},
-            {"Shift-Key Practice", "Master capitalization with opposite Shift keys",
-             "Press Shift with opposite pinky. Do not lift wrists while capitalizing.",
-             "The Quick Brown Fox Jumps Over The Lazy Dog", 25.0, 92.0},
-            {"Common Words", "Type high-frequency English vocabulary seamlessly",
-             "Maintain smooth rhythm across word transitions.",
-             "the and for you that with this have from they which one were", 25.0, 92.0},
-
-            // Level 3: Intermediate
-            {"Number Row Drills", "Type the top number row without looking down",
-             "Reach fingers up to the number keys: 1-5 with left hand, 6-0 with right hand.",
-             "12345 67890 2024 100 42 789 31415 9265 3589", 35.0, 94.0},
-            {"Punctuation Precision", "Master commas, periods, question marks, and apostrophes",
-             "Keep wrists still. Tap punctuation cleanly with right hand fingers.",
-             "Hello, World! How are you? I'm fine. That's great, isn't it?", 35.0, 94.0},
-            {"Symbols & Special Characters", "Use Shift with numbers to type common symbols",
-             "Hold Shift firmly while striking symbol keys: !, @, #, $, %, &, *.",
-             "Save 25% on items #1 & #2: total is $45.00 (tax incl @ 8%).", 35.0, 94.0},
-            {"Mixed Alphanumeric", "Combine letters, numbers, and symbols smoothly",
-             "Balance speed with zero-error precision across diverse character sets.",
-             "User #90210 paid $1,450.75 on 10/15/2024 via Order-ID #TX-778.", 35.0, 94.0},
-
-            // Level 4: Advanced
-            {"Sentence Fluency", "Build natural sentence cadence and rhythm",
-             "Read ahead one word while typing the current word for unbroken flow.",
-             "Consistency beats raw speed. Smooth typing develops effortless muscle memory.", 45.0, 95.0},
-            {"Complex Vocabulary", "Navigate polysyllabic and tricky words",
-             "Mentally chunk long words into familiar letter sequences.",
-             "Extraordinary phenomenon juxtaposition vocabulary consistency indispensable", 45.0, 95.0},
-            {"Paragraph Endurance", "Sustain high accuracy over longer passages",
-             "Breathe steadily and pace yourself without rushing.",
-             "Typing is a cognitive skill that improves with deliberate practice. Focus strictly on accuracy first; speed naturally follows when errors decrease.", 45.0, 95.0},
-            {"Speed Building Bursts", "Push your words-per-minute threshold",
-             "Allow your fingers to glide quickly across familiar patterns.",
-             "The rain in Spain stays mainly in the plain. Quick nimble fingers fly over keys.", 45.0, 95.0},
-
-            // Level 5: Professional
-            {"Business Correspondence", "Type formal professional communications",
-             "Format formal letters with clean punctuation and capitalization.",
-             "Dear Board Members, please review the attached Q3 financial audit before Friday.", 60.0, 97.0},
-            {"Technical Documentation", "Format technical code and engineering notes",
-             "Maintain sharp attention to brackets, semicolons, and syntax.",
-             "function calculateMetric(data) { return data.filter(x => x > 0).reduce((a, b) => a + b, 0); }", 60.0, 97.0},
-            {"High-Speed Sprint", "Peak performance speed drill under time constraints",
-             "Let muscle memory take over completely. Trust your finger positioning.",
-             "knowledge creates capability and deliberate practice transforms capability into mastery.", 60.0, 97.0},
-            {"Zero-Defect Challenge", "Flawless typing test with zero mistakes allowed",
-             "Every single keystroke must land accurately on its designated target.",
-             "Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away.", 60.0, 98.0}
-        };
-
+        // Map level (1-5) to category_id
         int[] levelCatIds = new int[6];
         try (PreparedStatement ps = c.prepareStatement("SELECT id FROM lesson_categories ORDER BY id")) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -466,26 +427,50 @@ public final class DatabaseInitializer {
             }
         }
 
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO lessons(category_id,level,order_index,title,objective,instructions,practice_text,min_wpm,min_accuracy) " +
-                "VALUES(?,?,?,?,?,?,?,?,?)")) {
-            int level = 1;
-            int order = 1;
-            for (Object[] l : lessons) {
-                ps.setInt(1, levelCatIds[level]);
-                ps.setInt(2, level);
-                ps.setInt(3, order);
-                ps.setString(4, (String) l[0]);
-                ps.setString(5, (String) l[1]);
-                ps.setString(6, (String) l[2]);
-                ps.setString(7, (String) l[3]);
-                ps.setDouble(8, (Double) l[4]);
-                ps.setDouble(9, (Double) l[5]);
-                ps.executeUpdate();
-                order++;
-                if (order > 4) {
-                    level++;
-                    order = 1;
+        // Upsert 100 lessons idempotently from LessonCurriculum
+        java.util.List<LessonCurriculum.LessonSeed> seeds = LessonCurriculum.getFullCurriculum();
+        for (LessonCurriculum.LessonSeed s : seeds) {
+            int catId = (s.level >= 1 && s.level < levelCatIds.length) ? levelCatIds[s.level] : 1;
+            boolean exists = false;
+            try (PreparedStatement chk = c.prepareStatement(
+                    "SELECT id FROM lessons WHERE level = ? AND order_index = ?")) {
+                chk.setInt(1, s.level);
+                chk.setInt(2, s.orderIndex);
+                try (ResultSet rs = chk.executeQuery()) {
+                    if (rs.next()) {
+                        exists = true;
+                    }
+                }
+            }
+
+            if (!exists) {
+                try (PreparedStatement ins = c.prepareStatement(
+                        "INSERT INTO lessons(category_id, level, order_index, title, objective, instructions, practice_text, min_wpm, min_accuracy) " +
+                        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                    ins.setInt(1, catId);
+                    ins.setInt(2, s.level);
+                    ins.setInt(3, s.orderIndex);
+                    ins.setString(4, s.title);
+                    ins.setString(5, s.objective);
+                    ins.setString(6, s.instructions);
+                    ins.setString(7, s.practiceText);
+                    ins.setDouble(8, s.minWpm);
+                    ins.setDouble(9, s.minAccuracy);
+                    ins.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement upd = c.prepareStatement(
+                        "UPDATE lessons SET title=?, objective=?, instructions=?, practice_text=?, min_wpm=?, min_accuracy=? " +
+                        "WHERE level=? AND order_index=?")) {
+                    upd.setString(1, s.title);
+                    upd.setString(2, s.objective);
+                    upd.setString(3, s.instructions);
+                    upd.setString(4, s.practiceText);
+                    upd.setDouble(5, s.minWpm);
+                    upd.setDouble(6, s.minAccuracy);
+                    upd.setInt(7, s.level);
+                    upd.setInt(8, s.orderIndex);
+                    upd.executeUpdate();
                 }
             }
         }

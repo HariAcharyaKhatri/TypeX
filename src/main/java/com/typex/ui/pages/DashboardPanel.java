@@ -33,13 +33,13 @@ public class DashboardPanel extends JPanel implements MainFrame.Refreshable, Mai
     private final JPanel welcomeBanner = new JPanel(new BorderLayout(16, 8));
     private final JLabel welcomeTitle = new JLabel("Welcome back!");
     private final JLabel welcomeSubtitle = new JLabel("Ready to elevate your typing speed and accuracy today?");
-    private final JButton bannerQuickStart = new JButton("Start Typing Test  ➔");
+    private final JButton bannerQuickStart = new JButton("Start Typing Test", com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PLAY, 14, Color.WHITE));
 
     // 4 Key Stat Cards
-    private final StatCard avgWpm = new StatCard("AVG SPEED (7D)", "-");
-    private final StatCard bestWpm = new StatCard("PERSONAL BEST", "-");
-    private final StatCard accuracy = new StatCard("ACCURACY (7D)", "-");
-    private final StatCard streak = new StatCard("ACTIVE STREAK", "0");
+    private final StatCard avgWpm = new StatCard("AVG SPEED (7D)", "-", com.typex.util.IconManager.getIcon(com.typex.util.IconManager.SPEED, 16, new Color(0x2563EB)));
+    private final StatCard bestWpm = new StatCard("PERSONAL BEST", "-", com.typex.util.IconManager.getIcon(com.typex.util.IconManager.TROPHY, 16, new Color(0xF59E0B)));
+    private final StatCard accuracy = new StatCard("ACCURACY (7D)", "-", com.typex.util.IconManager.getIcon(com.typex.util.IconManager.ACCURACY, 16, new Color(0x10B981)));
+    private final StatCard streak = new StatCard("ACTIVE STREAK", "0", com.typex.util.IconManager.getIcon(com.typex.util.IconManager.FLAME, 16, new Color(0xD97706)));
 
     // Middle Row: Level & XP Card + Daily Goal Card
     private final JPanel levelCard = new JPanel(new BorderLayout(8, 8));
@@ -48,13 +48,13 @@ public class DashboardPanel extends JPanel implements MainFrame.Refreshable, Mai
     private final JProgressBar levelProgress = new JProgressBar(0, 100);
 
     private final JPanel goalCard = new JPanel(new BorderLayout(8, 8));
-    private final JLabel streakLabel = new JLabel("🔥 0 Day Streak");
+    private final JLabel streakLabel = new JLabel("0 Day Streak");
     private final JLabel goalStatus = new JLabel("Daily Goal: 0% complete");
     private final JProgressBar goalProgress = new JProgressBar(0, 100);
 
     // Smart Recommendation Banner
     private final JPanel recCard = new JPanel(new BorderLayout(14, 12));
-    private final JLabel recTitle = new JLabel("💡 Recommended Practice");
+    private final JLabel recTitle = new JLabel("Recommended Practice");
     private final JLabel recDesc = new JLabel("Loading smart practice recommendations...");
     private final JLabel recReason = new JLabel("");
     private final JButton recActionBtn = new JButton("Practice Now");
@@ -388,7 +388,8 @@ public class DashboardPanel extends JPanel implements MainFrame.Refreshable, Mai
 
                     // 2. Streak & Daily Goal
                     int curStreak = data.streak.currentStreak;
-                    streakLabel.setText(String.format("🔥 %d Day Streak (Best: %d)", curStreak, data.streak.longestStreak));
+                    streakLabel.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.FLAME, 16, ThemeManager.colorGold()));
+                    streakLabel.setText(String.format("%d Day Streak (Best: %d)", curStreak, data.streak.longestStreak));
                     int goalProg = (int) Math.round(data.goal.getProgressPercentage());
                     goalProgress.setValue(goalProg);
                     goalStatus.setText(data.goal.achieved ? "✓ Daily Goal Achieved! (+150 XP)" : String.format("Goal: %d%% completed", goalProg));
@@ -400,10 +401,12 @@ public class DashboardPanel extends JPanel implements MainFrame.Refreshable, Mai
                     // 3. Recommendation
                     currentRec = data.recommendation;
                     if (currentRec != null) {
-                        recTitle.setText("💡 " + currentRec.title);
+                        recTitle.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.LIGHTBULB, 16, ThemeManager.accent()));
+                        recTitle.setText(currentRec.title);
                         recDesc.setText(currentRec.description);
                         recReason.setText("Focus: " + currentRec.reason);
                         recActionBtn.setText(currentRec.buttonText);
+                        recActionBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PLAY, 13, ThemeManager.fgOnAccent()));
                         recCard.setVisible(true);
                     } else {
                         recCard.setVisible(false);

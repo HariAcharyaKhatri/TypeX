@@ -29,10 +29,7 @@ import java.util.List;
 
 public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, MainFrame.ThemeAware {
     private static final int[] DURATIONS = {15, 30, 60, 120, 180, 300};
-    private static final String[] CATEGORIES = {
-            "Common English", "Random Words", "Sentences", "Paragraphs",
-            "Quotes", "Business English", "Programming", "Numbers and Symbols"
-    };
+    private static final String[] CATEGORIES = TextGenerator.CATEGORIES;
 
     private final MainFrame frame;
     private final StatisticsService stats = new StatisticsService();
@@ -227,7 +224,9 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         pbCard.setAlignmentX(Component.LEFT_ALIGNMENT);
         pbCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
 
-        JLabel pbTitle = new JLabel("⭐ Personal Record for this selection:");
+        JLabel pbTitle = new JLabel("Personal Record for this selection:");
+        pbTitle.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.STAR, 16, ThemeManager.accent()));
+        pbTitle.setIconTextGap(6);
         pbTitle.setFont(ThemeManager.getTitleFont(12.5f));
         pbTitle.setForeground(ThemeManager.accent());
 
@@ -246,6 +245,9 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         card.add(Box.createVerticalStrut(24));
 
         // Start Test Button
+        startBtn.setText("Start Typing Test");
+        startBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PLAY, 16, ThemeManager.fgOnAccent()));
+        startBtn.setIconTextGap(8);
         startBtn.setFont(ThemeManager.getTitleFont(15f));
         startBtn.setBackground(ThemeManager.accent());
         startBtn.setForeground(ThemeManager.fgOnAccent());
@@ -297,6 +299,9 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         topBar.setPreferredSize(new Dimension(0, 48));
 
         // Left: Exit button
+        exitBtn.setText("Exit Test");
+        exitBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.EXIT, 14, ThemeManager.fgPrimary()));
+        exitBtn.setIconTextGap(6);
         exitBtn.setFont(ThemeManager.getTitleFont(13f));
         exitBtn.setFocusPainted(false);
         exitBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -309,12 +314,18 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
 
         timeLabel.setFont(ThemeManager.getTitleFont(24f));
         timeLabel.setForeground(ThemeManager.accent());
+        timeLabel.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.TIMER, 18, ThemeManager.accent()));
+        timeLabel.setIconTextGap(6);
 
         wpmLabel.setFont(ThemeManager.getTitleFont(20f));
         wpmLabel.setForeground(ThemeManager.fgPrimary());
+        wpmLabel.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.SPEED, 16, ThemeManager.fgPrimary()));
+        wpmLabel.setIconTextGap(6);
 
         accLabel.setFont(ThemeManager.getTitleFont(20f));
         accLabel.setForeground(ThemeManager.fgPrimary());
+        accLabel.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.ACCURACY, 16, ThemeManager.fgPrimary()));
+        accLabel.setIconTextGap(6);
 
         mistakesLabel.setFont(ThemeManager.getTitleFont(18f));
         mistakesLabel.setForeground(ThemeManager.colorError());
@@ -329,6 +340,9 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 4));
         actions.setOpaque(false);
 
+        pauseResumeBtn.setText("Pause");
+        pauseResumeBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PAUSE, 14, ThemeManager.fgPrimary()));
+        pauseResumeBtn.setIconTextGap(6);
         pauseResumeBtn.setFont(ThemeManager.getBodyFont(13f));
         pauseResumeBtn.setFocusPainted(false);
         pauseResumeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -336,12 +350,17 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
             if (isPaused) resumeTest(); else pauseTest();
         });
 
+        restartBtn.setText("Restart");
+        restartBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.RESTART, 14, ThemeManager.fgPrimary()));
+        restartBtn.setIconTextGap(6);
         restartBtn.setFont(ThemeManager.getBodyFont(13f));
         restartBtn.setFocusPainted(false);
         restartBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         restartBtn.addActionListener(e -> restartTest());
 
-        heatmapBtn.setFont(ThemeManager.getBodyFont(12f));
+        heatmapBtn.setText("Heatmap");
+        heatmapBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.FLAME, 14, ThemeManager.fgSecondary()));
+        heatmapBtn.setIconTextGap(6);
         heatmapBtn.setFocusPainted(false);
         heatmapBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         heatmapBtn.addActionListener(e -> toggleHeatmap());
@@ -538,6 +557,7 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         engine.pause();
         if (countdown != null) countdown.stop();
         pauseResumeBtn.setText("Resume");
+        pauseResumeBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PLAY, 14, ThemeManager.fgPrimary()));
         timeLabel.setText("[PAUSED]");
     }
 
@@ -547,6 +567,7 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
         engine.resume();
         if (countdown != null) countdown.start();
         pauseResumeBtn.setText("Pause");
+        pauseResumeBtn.setIcon(com.typex.util.IconManager.getIcon(com.typex.util.IconManager.PAUSE, 14, ThemeManager.fgPrimary()));
         SwingUtilities.invokeLater(textPane::requestFocusInWindow);
     }
 

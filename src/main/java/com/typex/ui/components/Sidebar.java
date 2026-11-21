@@ -1,6 +1,7 @@
 package com.typex.ui.components;
 
 import com.typex.config.ThemeManager;
+import com.typex.util.IconManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,19 +13,20 @@ import java.util.function.Consumer;
 
 public class Sidebar extends JPanel {
     private static final String[][] CORE_ITEMS = {
-            {"dashboard", "Dashboard", "⊞"},
-            {"test", "Typing Test", "⌨"},
-            {"learn", "Learn Typing", "📖"},
-            {"keyboard", "Keyboard Trainer", "🖮"},
-            {"stats", "Statistics", "📈"}
+            {"dashboard", "Dashboard", IconManager.DASHBOARD},
+            {"test", "Typing Test", IconManager.TYPING_TEST},
+            {"learn", "Learn Typing", IconManager.LEARN},
+            {"games", "Typing Games", IconManager.GAMES},
+            {"keyboard", "Keyboard Trainer", IconManager.KEYBOARD},
+            {"stats", "Statistics", IconManager.STATISTICS}
     };
 
     private static final String[][] SECONDARY_ITEMS = {
-            {"custom", "Custom Practice", "✎"},
-            {"challenge", "Speed Challenge", "⚡"},
-            {"achievements", "Achievements", "🏆"},
-            {"settings", "Settings", "⚙"},
-            {"about", "About", "ℹ"}
+            {"custom", "Custom Practice", IconManager.CUSTOM},
+            {"challenge", "Speed Challenge", IconManager.CHALLENGE},
+            {"achievements", "Achievements", IconManager.ACHIEVEMENTS},
+            {"settings", "Settings", IconManager.SETTINGS},
+            {"about", "About", IconManager.ABOUT}
     };
 
     private final Consumer<String> onNavigate;
@@ -38,15 +40,18 @@ public class Sidebar extends JPanel {
     public Sidebar(Consumer<String> onNavigate) {
         this.onNavigate = onNavigate;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setPreferredSize(new Dimension(230, 0));
+        setPreferredSize(new Dimension(236, 0));
 
-        // Brand block
+        // Brand block with logo icon
         JPanel brandPanel = new JPanel();
         brandPanel.setLayout(new BoxLayout(brandPanel, BoxLayout.Y_AXIS));
         brandPanel.setOpaque(false);
         brandPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         brand.setFont(ThemeManager.getTitleFont(22f));
+        brand.setIcon(IconManager.getIcon(IconManager.KEYBOARD, 22, ThemeManager.accent()));
+        brand.setIconTextGap(8);
+
         tag.setFont(ThemeManager.getBodyFont(11f));
         brandPanel.add(brand);
         brandPanel.add(Box.createVerticalStrut(2));
@@ -67,7 +72,7 @@ public class Sidebar extends JPanel {
             add(Box.createVerticalStrut(3));
         }
 
-        add(Box.createVerticalStrut(16));
+        add(Box.createVerticalStrut(14));
 
         // Secondary section
         secSectionLabel.setFont(ThemeManager.getTitleFont(10.5f));
@@ -95,6 +100,7 @@ public class Sidebar extends JPanel {
                 BorderFactory.createEmptyBorder(18, 14, 18, 14)));
 
         brand.setForeground(ThemeManager.accent());
+        brand.setIcon(IconManager.getIcon(IconManager.KEYBOARD, 22, ThemeManager.accent()));
         tag.setForeground(ThemeManager.fgMuted());
         coreSectionLabel.setForeground(ThemeManager.fgMuted());
         secSectionLabel.setForeground(ThemeManager.fgMuted());
@@ -105,8 +111,8 @@ public class Sidebar extends JPanel {
         repaint();
     }
 
-    private NavButton createButton(String key, String label, String icon) {
-        NavButton b = new NavButton(key, label, icon);
+    private NavButton createButton(String key, String label, String iconKey) {
+        NavButton b = new NavButton(key, label, iconKey);
         b.addActionListener(e -> onNavigate.accept(key));
         return b;
     }
@@ -120,20 +126,23 @@ public class Sidebar extends JPanel {
 
     private class NavButton extends JButton {
         private final String key;
+        private final String iconKey;
         private boolean isHovered = false;
 
-        public NavButton(String key, String label, String icon) {
-            super("  " + icon + "   " + label);
+        public NavButton(String key, String label, String iconKey) {
+            super(label);
             this.key = key;
+            this.iconKey = iconKey;
             setHorizontalAlignment(SwingConstants.LEFT);
             setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
-            setPreferredSize(new Dimension(200, 38));
+            setPreferredSize(new Dimension(208, 38));
             setAlignmentX(Component.LEFT_ALIGNMENT);
             setFocusPainted(false);
             setBorderPainted(false);
             setContentAreaFilled(false);
             setOpaque(true);
             setFont(ThemeManager.getBodyFont(13.5f));
+            setIconTextGap(10);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
             addMouseListener(new MouseAdapter() {
@@ -156,6 +165,7 @@ public class Sidebar extends JPanel {
             if (active) {
                 setBackground(ThemeManager.accentLight());
                 setForeground(ThemeManager.accent());
+                setIcon(IconManager.getIcon(iconKey, 18, ThemeManager.accent()));
                 setFont(ThemeManager.getTitleFont(13.5f));
                 setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 3, 0, 0, ThemeManager.accent()),
@@ -163,6 +173,7 @@ public class Sidebar extends JPanel {
             } else if (isHovered) {
                 setBackground(ThemeManager.bgSecondary());
                 setForeground(ThemeManager.fgPrimary());
+                setIcon(IconManager.getIcon(iconKey, 18, ThemeManager.fgPrimary()));
                 setFont(ThemeManager.getBodyFont(13.5f));
                 setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 3, 0, 0, new Color(0, 0, 0, 0)),
@@ -170,6 +181,7 @@ public class Sidebar extends JPanel {
             } else {
                 setBackground(ThemeManager.bgCard());
                 setForeground(ThemeManager.fgSecondary());
+                setIcon(IconManager.getIcon(iconKey, 18, ThemeManager.fgSecondary()));
                 setFont(ThemeManager.getBodyFont(13.5f));
                 setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 3, 0, 0, new Color(0, 0, 0, 0)),
