@@ -44,7 +44,7 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
         // Header Stats
         totalPlayedCard = new StatCard("GAMES PLAYED", "0", "Total arcade sessions", IconManager.getIcon("rocket", 18, ThemeManager.accent()));
         totalScoreCard = new StatCard("ARCADE SCORE", "0", "Cumulative high scores", IconManager.getIcon("trophy", 18, ThemeManager.colorWarning()));
-        favoriteGameCard = new StatCard("FAVORITE MODE", "Word Rush", "Most practiced mode", IconManager.getIcon("star", 18, ThemeManager.accent()));
+        favoriteGameCard = new StatCard("FAVORITE MODE", "No games yet", "Most practiced mode", IconManager.getIcon("star", 18, ThemeManager.accent()));
 
         JPanel statsRow = new JPanel(new GridLayout(1, 3, 16, 0));
         statsRow.setOpaque(false);
@@ -80,10 +80,14 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
 
     private void launchGame(GameType type) {
         if (currentGamePanel != null) {
+            currentGamePanel.cleanup();
             gameContainer.remove(currentGamePanel);
         }
 
         Runnable onExit = () -> {
+            if (currentGamePanel != null) {
+                currentGamePanel.cleanup();
+            }
             cardLayout.show(cardsPanel, "catalog");
             refresh();
         };
@@ -188,6 +192,12 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
         refresh();
     }
 
+    public void cleanup() {
+        if (currentGamePanel != null) {
+            currentGamePanel.cleanup();
+        }
+    }
+
     @Override
     public void refresh() {
         if (frame.getUser() == null) return;
@@ -196,12 +206,14 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             int totalGames = 0;
             int totalScore = 0;
+            String favoriteGame = null;
             Map<String, GamePersonalBest> pbs;
 
             @Override
             protected Void doInBackground() {
                 totalGames = gameDao.getTotalGamesPlayed(uid);
                 totalScore = gameDao.getTotalScore(uid);
+                favoriteGame = gameDao.getFavoriteGameType(uid);
                 pbs = gameDao.getAllPersonalBests(uid);
                 return null;
             }
@@ -210,6 +222,13 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
             protected void done() {
                 totalPlayedCard.setValue(String.format("%,d", totalGames));
                 totalScoreCard.setValue(String.format("%,d", totalScore));
+
+                String favDisplay = "No games yet";
+                if (favoriteGame != null && !favoriteGame.isEmpty()) {
+                    GameType gt = GameType.fromId(favoriteGame);
+                    favDisplay = gt != null ? gt.displayName : favoriteGame;
+                }
+                favoriteGameCard.setValue(favDisplay);
 
                 gamesGrid.removeAll();
                 for (GameType gt : GameType.values()) {

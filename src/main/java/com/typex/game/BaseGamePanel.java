@@ -33,6 +33,8 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
     protected State gameState = State.READY;
     protected Timer gameLoopTimer;
     protected long sessionStartNanos;
+    protected long pauseStartNanos = 0;
+    protected long accumulatedPausedNanos = 0;
     protected int elapsedSeconds = 0;
 
     // Core Metrics
@@ -237,6 +239,8 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         errors = 0;
         elapsedSeconds = 0;
         sessionStartNanos = System.nanoTime();
+        pauseStartNanos = 0;
+        accumulatedPausedNanos = 0;
 
         hideOverlays();
         onGameStart();
@@ -248,12 +252,17 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
     public void pauseGame() {
         if (gameState != State.PLAYING) return;
         gameState = State.PAUSED;
+        pauseStartNanos = System.nanoTime();
         gameLoopTimer.stop();
         showPauseOverlay();
     }
 
     public void resumeGame() {
         if (gameState != State.PAUSED) return;
+        if (pauseStartNanos > 0) {
+            accumulatedPausedNanos += (System.nanoTime() - pauseStartNanos);
+            pauseStartNanos = 0;
+        }
         gameState = State.PLAYING;
         hideOverlays();
         gameLoopTimer.start();
@@ -265,11 +274,35 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         startGame();
     }
 
+    public long getActiveElapsedNanos() {
+        if (gameState == State.READY) return 0;
+        long current = (gameState == State.PAUSED && pauseStartNanos > 0) ? pauseStartNanos : System.nanoTime();
+        long totalElapsed = current - sessionStartNanos;
+        long active = totalElapsed - accumulatedPausedNanos;
+        return Math.max(0, active);
+    }
+
+    public void cleanup() {
+        if (gameLoopTimer != null && gameLoopTimer.isRunning()) {
+            gameLoopTimer.stop();
+        }
+        if (gameState == State.PLAYING) {
+            if (pauseStartNanos == 0) {
+                pauseStartNanos = System.nanoTime();
+            }
+            gameState = State.PAUSED;
+        }
+    }
+
     public void endGame() {
         if (gameState == State.GAME_OVER) return;
+        if (gameState == State.PAUSED && pauseStartNanos > 0) {
+            accumulatedPausedNanos += (System.nanoTime() - pauseStartNanos);
+            pauseStartNanos = 0;
+        }
         gameState = State.GAME_OVER;
         gameLoopTimer.stop();
-        elapsedSeconds = (int) Math.max(1, (System.nanoTime() - sessionStartNanos) / 1_000_000_000L);
+        elapsedSeconds = (int) Math.max(1, getActiveElapsedNanos() / 1_000_000_000L);
 
         double acc = totalKeystrokes > 0 ? (correctKeystrokes * 100.0 / totalKeystrokes) : 100.0;
         double wpm = (correctKeystrokes / 5.0) / (elapsedSeconds / 60.0);
@@ -278,13 +311,16 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         int uid = frame.getUser() != null ? frame.getUser().id : 1;
         GameSession session = new GameSession(uid, gameType.id, score, level, wordsCompleted, acc, wpm, elapsedSeconds);
 
-        // Record in SQLite
-        boolean isNewPb = gameDao.recordSession(session);
+        // Pre-check personal best so XP includes accurate PB bonus
+        boolean isNewPb = gameDao.isPersonalBest(uid, gameType.id, score, wpm, acc);
 
-        // Gamification XP
+        // Gamification XP (populates session.xpEarned)
         GamificationService.SessionReward reward = gamification.recordGameSession(uid, session, isNewPb);
 
-        showGameOverOverlay(session, isNewPb, reward);
+        // Record in SQLite atomically with accurate session.xpEarned and independent PBs
+        boolean persistedPb = gameDao.recordSession(session);
+
+        showGameOverOverlay(session, isNewPb || persistedPb, reward);
     }
 
     private void confirmExit() {
@@ -295,7 +331,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
                 "Are you sure you want to exit to the games library?",
                 "Exit Game", JOptionPane.YES_NO_OPTION);
         if (res == JOptionPane.YES_OPTION) {
-            gameLoopTimer.stop();
+            cleanup();
             if (onExitToCatalog != null) {
                 onExitToCatalog.run();
             }
@@ -351,7 +387,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
             exitB.setAlignmentX(Component.CENTER_ALIGNMENT);
             exitB.setMaximumSize(new Dimension(200, 38));
             exitB.addActionListener(e -> {
-                gameLoopTimer.stop();
+                cleanup();
                 if (onExitToCatalog != null) onExitToCatalog.run();
             });
 
@@ -441,6 +477,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         exitB.setFocusPainted(false);
         exitB.setIcon(IconManager.getIcon("exit", 16, ThemeManager.fgPrimary()));
         exitB.addActionListener(e -> {
+            cleanup();
             if (onExitToCatalog != null) onExitToCatalog.run();
         });
 
@@ -474,7 +511,8 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         metric1Label.setText(getMetric1Value());
         metric2Label.setText(getMetric2Value());
 
-        double elapsedMins = Math.max(1, (System.nanoTime() - sessionStartNanos) / 1_000_000_000L) / 60.0;
+        double activeSeconds = getActiveElapsedNanos() / 1_000_000_000.0;
+        double elapsedMins = Math.max(1.0, activeSeconds) / 60.0;
         double wpm = (correctKeystrokes / 5.0) / elapsedMins;
         speedLabel.setText(String.format("%.0f WPM", Math.max(0, wpm)));
     }

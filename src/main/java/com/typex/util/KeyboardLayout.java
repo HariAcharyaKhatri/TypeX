@@ -152,19 +152,80 @@ public class KeyboardLayout {
         return ALL_LAYOUTS.values();
     }
 
-    public static LayoutInfo getLayout(String id) {
-        if (id == null) return ALL_LAYOUTS.get("US_QWERTY");
-        return ALL_LAYOUTS.getOrDefault(id, ALL_LAYOUTS.get("US_QWERTY"));
+    public static LayoutInfo getLayout(String idOrName) {
+        return getLayoutOrDefault(idOrName);
     }
 
     public static LayoutInfo getLayoutOrDefault(String idOrName) {
-        if (idOrName == null) return ALL_LAYOUTS.get("US_QWERTY");
+        if (idOrName == null || idOrName.isBlank()) {
+            return ALL_LAYOUTS.get("US_QWERTY");
+        }
+        String clean = idOrName.trim();
+
+        // 1. Direct ID or Display Name match
         for (LayoutInfo l : ALL_LAYOUTS.values()) {
-            if (l.id.equalsIgnoreCase(idOrName) || l.displayName.equalsIgnoreCase(idOrName)) {
+            if (l.id.equalsIgnoreCase(clean) || l.displayName.equalsIgnoreCase(clean)) {
                 return l;
             }
         }
+
+        // 2. Normalized Aliases
+        String upper = clean.toUpperCase().replace(" ", "_").replace("-", "_");
+        if (upper.contains("GERMAN") || upper.equals("DE_QWERTZ") || upper.equals("QWERTZ")) {
+            return ALL_LAYOUTS.get("GERMAN_QWERTZ");
+        }
+        if (upper.contains("FRENCH") || upper.equals("FR_AZERTY") || upper.equals("AZERTY")) {
+            return ALL_LAYOUTS.get("FRENCH_AZERTY");
+        }
+        if (upper.contains("UK") || upper.equals("EN_GB")) {
+            return ALL_LAYOUTS.get("UK_QWERTY");
+        }
+        if (upper.contains("DVORAK")) {
+            return ALL_LAYOUTS.get("DVORAK");
+        }
+        if (upper.contains("COLEMAK")) {
+            return ALL_LAYOUTS.get("COLEMAK");
+        }
+        if (upper.contains("QWERTY") || upper.equals("US")) {
+            return ALL_LAYOUTS.get("US_QWERTY");
+        }
+
         return ALL_LAYOUTS.get("US_QWERTY");
+    }
+
+    public static String getFingerInstruction(LayoutInfo layout, char c) {
+        if (c == ' ') return "Both Thumbs (Spacebar)";
+        if (layout == null) layout = ALL_LAYOUTS.get("US_QWERTY");
+
+        Finger f = layout.getFingerForChar(c);
+        if (f == null) {
+            // Check lowercase or uppercase fallback
+            if (Character.isLetter(c)) {
+                f = layout.getFingerForChar(Character.toLowerCase(c));
+            }
+        }
+
+        if (f == null) {
+            LayoutInfo us = ALL_LAYOUTS.get("US_QWERTY");
+            f = (us != null) ? us.getFingerForChar(c) : null;
+        }
+
+        if (f == null) {
+            return "Target Finger: Any Free Finger";
+        }
+
+        boolean shifted = layout.requiresShift(c);
+        if (!shifted && Character.isUpperCase(c)) {
+            shifted = true;
+        }
+
+        String shiftNote = "";
+        if (shifted) {
+            boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
+            shiftNote = " + " + (isLeftHand ? "Right Shift" : "Left Shift");
+        }
+
+        return f.displayName + shiftNote;
     }
 
     public static DetectionResult detectOperatingSystemLayout() {

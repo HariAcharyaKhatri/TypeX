@@ -66,6 +66,11 @@ public class MainFrame extends JFrame {
 
     public void navigate(String key) {
         setDistractionFree(false);
+        for (Component c : content.getComponents()) {
+            if (c instanceof com.typex.ui.pages.GamesPanel gp && !"games".equals(key)) {
+                gp.cleanup();
+            }
+        }
         cards.show(content, key);
         sidebar.setActive(key);
         topBar.refresh();

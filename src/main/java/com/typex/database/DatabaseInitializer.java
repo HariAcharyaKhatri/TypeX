@@ -395,6 +395,20 @@ public final class DatabaseInitializer {
                 st.executeUpdate("ALTER TABLE user_preferences ADD COLUMN passage_font_size INTEGER DEFAULT 26");
             }
         }
+
+        // Migration for game_sessions: xp_earned
+        Set<String> gameCols = new HashSet<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(game_sessions)")) {
+            while (rs.next()) {
+                gameCols.add(rs.getString("name").toLowerCase());
+            }
+        }
+        if (!gameCols.isEmpty() && !gameCols.contains("xp_earned")) {
+            try (Statement st = c.createStatement()) {
+                st.executeUpdate("ALTER TABLE game_sessions ADD COLUMN xp_earned INTEGER DEFAULT 0");
+            }
+        }
     }
 
     private static void seedLessons(Connection c) throws SQLException {

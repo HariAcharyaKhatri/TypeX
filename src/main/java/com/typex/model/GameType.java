@@ -53,11 +53,17 @@ public enum GameType {
     }
 
     public static GameType fromId(String id) {
+        if (id == null) return null;
         for (GameType gt : values()) {
             if (gt.id.equalsIgnoreCase(id) || gt.name().equalsIgnoreCase(id)) {
                 return gt;
             }
         }
-        return WORD_RUSH;
+        return null;
+    }
+
+    public static GameType fromIdOrDefault(String id, GameType defaultVal) {
+        GameType gt = fromId(id);
+        return gt != null ? gt : defaultVal;
     }
 }

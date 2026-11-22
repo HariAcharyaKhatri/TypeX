@@ -79,6 +79,23 @@ public class UserPreferenceDAO {
         }
     }
 
+    public void updateKeyboardLayout(int userId, String layout) {
+        if (layout == null) return;
+        synchronized (DatabaseManager.getInstance().getLock()) {
+            try (Connection c = DatabaseManager.getInstance().getConnection()) {
+                ensureRowExists(c, userId);
+                try (PreparedStatement ps = c.prepareStatement(
+                        "UPDATE user_preferences SET keyboard_layout=? WHERE user_id=?")) {
+                    ps.setString(1, layout);
+                    ps.setInt(2, userId);
+                    ps.executeUpdate();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error updating user keyboard layout: " + e.getMessage());
+            }
+        }
+    }
+
     private void ensureRowExists(Connection c, int userId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT OR IGNORE INTO user_preferences(user_id) VALUES(?)")) {

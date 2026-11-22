@@ -56,6 +56,10 @@ public class VirtualKeyboard extends JPanel {
         return activeLayout;
     }
 
+    public LayoutInfo getLayoutInfo() {
+        return activeLayout;
+    }
+
     private void buildKeyboardUI() {
         removeAll();
         keyComponentsById.clear();
@@ -98,34 +102,11 @@ public class VirtualKeyboard extends JPanel {
     }
 
     public static String getFingerInstruction(char c) {
-        if (c == ' ') return "Both Thumbs (Spacebar)";
-        LayoutInfo layout = KeyboardLayout.getLayout("US_QWERTY");
-        Finger f = layout != null ? layout.getFingerForChar(c) : null;
-        if (f == null) return "Target Finger: Any Free Finger";
-        boolean shifted = layout.requiresShift(c);
-        String shiftNote = "";
-        if (shifted) {
-            boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
-            shiftNote = " + " + (isLeftHand ? "Right Shift" : "Left Shift");
-        }
-        return f.displayName + shiftNote;
+        return KeyboardLayout.getFingerInstruction(KeyboardLayout.getLayout("US_QWERTY"), c);
     }
 
     public String getFingerInstructionForActiveLayout(char c) {
-        if (c == ' ') return "Both Thumbs (Spacebar)";
-        if (activeLayout != null) {
-            Finger f = activeLayout.getFingerForChar(c);
-            if (f != null) {
-                boolean shifted = activeLayout.requiresShift(c);
-                String shiftNote = "";
-                if (shifted) {
-                    boolean isLeftHand = f == Finger.LEFT_PINKY || f == Finger.LEFT_RING || f == Finger.LEFT_MIDDLE || f == Finger.LEFT_INDEX;
-                    shiftNote = " + " + (isLeftHand ? "Right Shift" : "Left Shift");
-                }
-                return f.displayName + shiftNote;
-            }
-        }
-        return getFingerInstruction(c);
+        return KeyboardLayout.getFingerInstruction(activeLayout != null ? activeLayout : KeyboardLayout.getLayout("US_QWERTY"), c);
     }
 
     public void highlightKey(char ch) {

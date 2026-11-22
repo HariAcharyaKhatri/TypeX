@@ -19,7 +19,7 @@ public class KeyMasterGame extends BaseGamePanel {
 
     private final GameCanvas canvas = new GameCanvas();
     private final Random rng = new Random();
-    private final String keyPool = "abcdefghijklmnopqrstuvwxyz;,./";
+    private com.typex.util.KeyboardLayout.LayoutInfo activeLayout;
 
     private char targetKey = 'a';
     private long keySpawnNanos = 0;
@@ -31,6 +31,7 @@ public class KeyMasterGame extends BaseGamePanel {
 
     public KeyMasterGame(MainFrame frame, Runnable onExitToCatalog) {
         super(frame, GameType.KEY_MASTER, onExitToCatalog);
+        activeLayout = com.typex.util.KeyboardLayout.getLayoutOrDefault("US QWERTY");
     }
 
     @Override
@@ -62,6 +63,16 @@ public class KeyMasterGame extends BaseGamePanel {
 
     @Override
     protected void onGameStart() {
+        String layoutName = "US QWERTY";
+        if (frame != null && frame.getUser() != null) {
+            try {
+                com.typex.model.UserPreference up = new com.typex.dao.UserPreferenceDAO().getForUser(frame.getUser().id);
+                if (up != null && up.keyboardLayout != null) {
+                    layoutName = up.keyboardLayout;
+                }
+            } catch (Exception ignored) {}
+        }
+        activeLayout = com.typex.util.KeyboardLayout.getLayoutOrDefault(layoutName);
         trialsRemaining = totalTrials;
         reactionTimes.clear();
         lastFeedback = "Get Ready!";
@@ -70,7 +81,9 @@ public class KeyMasterGame extends BaseGamePanel {
     }
 
     private void spawnNextKey() {
-        targetKey = keyPool.charAt(rng.nextInt(keyPool.length()));
+        String pool = com.typex.service.KeyboardDrillService.getDrillPool(activeLayout, "Random Keys");
+        if (pool == null || pool.isEmpty()) pool = "abcdefghijklmnopqrstuvwxyz";
+        targetKey = pool.charAt(rng.nextInt(pool.length()));
         keySpawnNanos = System.nanoTime();
     }
 
@@ -129,9 +142,10 @@ public class KeyMasterGame extends BaseGamePanel {
     protected void handleSpace() {}
 
     private String getFingerGuidance(char ch) {
-        com.typex.util.KeyboardLayout.LayoutInfo info = com.typex.util.KeyboardLayout.getLayout("US QWERTY");
-        com.typex.util.KeyboardLayout.Finger f = info.getFingerForChar(ch);
-        return f != null ? f.displayName : "Index Finger";
+        if (activeLayout == null) {
+            activeLayout = com.typex.util.KeyboardLayout.getLayoutOrDefault("US QWERTY");
+        }
+        return com.typex.util.KeyboardLayout.getFingerInstruction(activeLayout, ch);
     }
 
     private class GameCanvas extends JPanel {

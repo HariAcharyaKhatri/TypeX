@@ -5,9 +5,11 @@ import com.typex.dao.CharacterErrorDAO;
 import com.typex.dao.KeyboardSessionDAO;
 import com.typex.model.CharacterError;
 import com.typex.model.KeyboardSession;
+import com.typex.service.KeyboardDrillService;
 import com.typex.ui.MainFrame;
 import com.typex.ui.components.VirtualKeyboard;
 import com.typex.util.IconManager;
+import com.typex.util.KeyboardLayout;
 import com.typex.util.SoundManager;
 
 import javax.swing.*;
@@ -17,19 +19,7 @@ import java.util.*;
 import java.util.List;
 
 public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshable, MainFrame.ThemeAware {
-    private static final String[] DRILLS = {
-            "Random Keys",
-            "Home Row (ASDF JKL;)",
-            "Top Row (QWERTYUIOP)",
-            "Bottom Row (ZXCVBNM)",
-            "Left Hand",
-            "Right Hand",
-            "Index Fingers",
-            "Middle Fingers",
-            "Ring Fingers",
-            "Pinky Fingers",
-            "Weak Keys Drill"
-    };
+    private static final String[] DRILLS = KeyboardDrillService.DRILLS;
 
     private final MainFrame frame;
     private final CharacterErrorDAO charErrorDAO = new CharacterErrorDAO();
@@ -37,7 +27,7 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
 
     private final VirtualKeyboard keyboard = new VirtualKeyboard();
     private final JComboBox<String> drillSelector = new JComboBox<>(DRILLS);
-    private final JComboBox<String> layoutSelector = new JComboBox<>(com.typex.util.KeyboardLayout.LAYOUT_NAMES);
+    private final JComboBox<String> layoutSelector = new JComboBox<>(KeyboardLayout.LAYOUT_NAMES);
     private final JLabel promptLabel = new JLabel("Press Key: -");
     private final JLabel fingerInstruction = new JLabel("Finger: -");
     private final JLabel scoreLabel = new JLabel("Accuracy: 100%");
@@ -71,9 +61,21 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
         layoutSelector.addActionListener(e -> {
             String lName = (String) layoutSelector.getSelectedItem();
             if (lName != null) {
-                keyboard.setLayoutInfo(com.typex.util.KeyboardLayout.getLayout(lName));
-                nextTargetKey();
+                KeyboardLayout.LayoutInfo info = KeyboardLayout.getLayoutOrDefault(lName);
+                keyboard.setLayoutInfo(info);
+                updateDrillPool();
                 requestFocusInWindow();
+                if (frame.getUser() != null) {
+                    final int uid = frame.getUser().id;
+                    final String prefName = info.displayName;
+                    new SwingWorker<Void, Void>() {
+                        @Override
+                        protected Void doInBackground() {
+                            new com.typex.dao.UserPreferenceDAO().updateKeyboardLayout(uid, prefName);
+                            return null;
+                        }
+                    }.execute();
+                }
             }
         });
         top.add(layoutSelector);
@@ -142,7 +144,8 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
 
     private void toggleHeatmap() {
         if (heatmapToggle.isSelected()) {
-            heatmapToggle.setText("⌨ Finger Guide");
+            heatmapToggle.setText("Finger Guide");
+            heatmapToggle.setIcon(IconManager.getIcon("keyboard", 14, ThemeManager.fgPrimary()));
             if (frame.getUser() != null) {
                 SwingWorker<Map<Character, Integer>, Void> worker = new SwingWorker<>() {
                     @Override
@@ -160,7 +163,8 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
                 worker.execute();
             }
         } else {
-            heatmapToggle.setText("🔥 Error Heatmap");
+            heatmapToggle.setText("Error Heatmap");
+            heatmapToggle.setIcon(IconManager.getIcon("flame", 14, ThemeManager.colorWarning()));
             keyboard.setHeatmapMode(false, null);
         }
         requestFocusInWindow();
@@ -168,28 +172,23 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
 
     private void updateDrillPool() {
         String sel = (String) drillSelector.getSelectedItem();
-        switch (sel != null ? sel : "Random Keys") {
-            case "Home Row (ASDF JKL;)" -> currentPool = "asdfjkl;";
-            case "Top Row (QWERTYUIOP)" -> currentPool = "qwertyuiop";
-            case "Bottom Row (ZXCVBNM)" -> currentPool = "zxcvbnm";
-            case "Left Hand" -> currentPool = "qwert" + "asdfg" + "zxcvb";
-            case "Right Hand" -> currentPool = "yuiop" + "hjkl" + "nm";
-            case "Index Fingers" -> currentPool = "rtyufghvbn";
-            case "Middle Fingers" -> currentPool = "edcik";
-            case "Ring Fingers" -> currentPool = "wsxol";
-            case "Pinky Fingers" -> currentPool = "qazp";
-            case "Weak Keys Drill" -> {
-                loadWeakKeysPool();
-                return;
-            }
-            default -> currentPool = "abcdefghijklmnopqrstuvwxyz";
+        if (sel == null) sel = "Random Keys";
+        if ("Weak Keys Drill".equalsIgnoreCase(sel)) {
+            loadWeakKeysPool();
+            return;
         }
+        currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), sel);
         resetStats();
         nextTargetKey();
     }
 
     private void loadWeakKeysPool() {
-        if (frame.getUser() == null) return;
+        if (frame.getUser() == null) {
+            currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
+            resetStats();
+            nextTargetKey();
+            return;
+        }
         final int uid = frame.getUser().id;
 
         SwingWorker<List<CharacterError>, Void> worker = new SwingWorker<>() {
@@ -202,8 +201,8 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
             protected void done() {
                 try {
                     List<CharacterError> errs = get();
-                    if (errs.isEmpty()) {
-                        currentPool = "asdfjkl;";
+                    if (errs == null || errs.isEmpty()) {
+                        currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
                     } else {
                         StringBuilder sb = new StringBuilder();
                         for (CharacterError ce : errs) {
@@ -212,11 +211,15 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
                                 sb.append(Character.toLowerCase(c));
                             }
                         }
-                        currentPool = sb.length() > 0 ? sb.toString() : "asdfjkl;";
+                        currentPool = sb.length() > 0 ? sb.toString() : KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
                     }
                     resetStats();
                     nextTargetKey();
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                    currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
+                    resetStats();
+                    nextTargetKey();
+                }
             }
         };
         worker.execute();
@@ -231,13 +234,15 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
     }
 
     private void nextTargetKey() {
-        if (currentPool.isEmpty()) currentPool = "asdf";
+        if (currentPool == null || currentPool.isEmpty()) {
+            currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
+        }
         currentTargetKey = currentPool.charAt(rng.nextInt(currentPool.length()));
         keyboard.highlightKey(currentTargetKey);
         keyPresentedNanos = System.nanoTime();
 
         promptLabel.setText("Press Key: '" + Character.toUpperCase(currentTargetKey) + "'");
-        fingerInstruction.setText("👉 " + keyboard.getFingerInstruction(currentTargetKey));
+        fingerInstruction.setText("👉 " + keyboard.getFingerInstructionForActiveLayout(currentTargetKey));
     }
 
     private void handleKeyInput(char c) {
@@ -336,8 +341,10 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
                     try {
                         com.typex.model.UserPreference up = get();
                         if (up != null && up.keyboardLayout != null) {
-                            layoutSelector.setSelectedItem(up.keyboardLayout);
-                            keyboard.setLayoutInfo(com.typex.util.KeyboardLayout.getLayout(up.keyboardLayout));
+                            KeyboardLayout.LayoutInfo lInfo = KeyboardLayout.getLayoutOrDefault(up.keyboardLayout);
+                            layoutSelector.setSelectedItem(lInfo.displayName);
+                            keyboard.setLayoutInfo(lInfo);
+                            updateDrillPool();
                         }
                     } catch (Exception ignored) {}
                 }

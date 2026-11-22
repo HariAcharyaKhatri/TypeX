@@ -11,10 +11,10 @@ public class GameDAO {
 
     public boolean recordSession(GameSession session) {
         if (session == null || session.userId <= 0) return false;
-        boolean isNewPb = false;
+        final boolean[] isNewPb = new boolean[]{false};
 
-        synchronized (DatabaseManager.getInstance().getLock()) {
-            try (Connection c = DatabaseManager.getInstance().getConnection()) {
+        try {
+            DatabaseManager.getInstance().executeTransaction(c -> {
                 // 1. Insert session record
                 String insertSql = """
                     INSERT INTO game_sessions(user_id, game_type, score, level_reached, words_completed,
@@ -39,11 +39,30 @@ public class GameDAO {
                     }
                 }
 
-                // 2. Check and update personal best
-                GamePersonalBest existingPb = getPersonalBest(session.userId, session.gameType);
+                // 2. Check and update personal best atomically
+                GamePersonalBest existingPb = null;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT * FROM game_personal_bests WHERE user_id = ? AND game_type = ?")) {
+                    ps.setInt(1, session.userId);
+                    ps.setString(2, session.gameType);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            existingPb = new GamePersonalBest();
+                            existingPb.id = rs.getInt("id");
+                            existingPb.userId = rs.getInt("user_id");
+                            existingPb.gameType = rs.getString("game_type");
+                            existingPb.highScore = rs.getInt("high_score");
+                            existingPb.highestLevel = rs.getInt("highest_level");
+                            existingPb.bestWpm = rs.getDouble("best_wpm");
+                            existingPb.bestAccuracy = rs.getDouble("best_accuracy");
+                            existingPb.achievedAt = rs.getString("achieved_at");
+                        }
+                    }
+                }
+
                 if (existingPb == null) {
-                    if (session.score > 0) {
-                        isNewPb = true;
+                    if (session.score > 0 || session.wpm > 0 || session.accuracy > 0) {
+                        isNewPb[0] = true;
                         String insPb = """
                             INSERT INTO game_personal_bests(user_id, game_type, high_score, highest_level,
                                                             best_wpm, best_accuracy)
@@ -53,39 +72,70 @@ public class GameDAO {
                             ps.setInt(1, session.userId);
                             ps.setString(2, session.gameType);
                             ps.setInt(3, session.score);
-                            ps.setInt(4, session.levelReached);
+                            ps.setInt(4, Math.max(1, session.levelReached));
                             ps.setDouble(5, session.wpm);
                             ps.setDouble(6, session.accuracy);
                             ps.executeUpdate();
                         }
                     }
-                } else if (session.score > existingPb.highScore) {
-                    isNewPb = true;
-                    String updPb = """
-                        UPDATE game_personal_bests
-                        SET high_score = ?,
-                            highest_level = MAX(highest_level, ?),
-                            best_wpm = MAX(best_wpm, ?),
-                            best_accuracy = MAX(best_accuracy, ?),
-                            achieved_at = CURRENT_TIMESTAMP
-                        WHERE user_id = ? AND game_type = ?
-                    """;
-                    try (PreparedStatement ps = c.prepareStatement(updPb)) {
-                        ps.setInt(1, session.score);
-                        ps.setInt(2, session.levelReached);
-                        ps.setDouble(3, session.wpm);
-                        ps.setDouble(4, session.accuracy);
-                        ps.setInt(5, session.userId);
-                        ps.setString(6, session.gameType);
-                        ps.executeUpdate();
+                } else {
+                    boolean scoreImproved = session.score > existingPb.highScore;
+                    boolean levelImproved = session.levelReached > existingPb.highestLevel;
+                    boolean wpmImproved = session.wpm > existingPb.bestWpm;
+                    boolean accImproved = session.accuracy > existingPb.bestAccuracy;
+
+                    if (scoreImproved || levelImproved || wpmImproved || accImproved) {
+                        isNewPb[0] = true;
+                        String updPb = """
+                            UPDATE game_personal_bests
+                            SET high_score = MAX(high_score, ?),
+                                highest_level = MAX(highest_level, ?),
+                                best_wpm = MAX(best_wpm, ?),
+                                best_accuracy = MAX(best_accuracy, ?),
+                                achieved_at = CURRENT_TIMESTAMP
+                            WHERE user_id = ? AND game_type = ?
+                        """;
+                        try (PreparedStatement ps = c.prepareStatement(updPb)) {
+                            ps.setInt(1, session.score);
+                            ps.setInt(2, session.levelReached);
+                            ps.setDouble(3, session.wpm);
+                            ps.setDouble(4, session.accuracy);
+                            ps.setInt(5, session.userId);
+                            ps.setString(6, session.gameType);
+                            ps.executeUpdate();
+                        }
                     }
                 }
-            } catch (SQLException e) {
-                System.err.println("Error recording game session: " + e.getMessage());
-            }
+            });
+        } catch (SQLException e) {
+            System.err.println("Error recording game session atomically: " + e.getMessage());
         }
 
-        return isNewPb;
+        return isNewPb[0];
+    }
+
+    public boolean isPersonalBest(int userId, String gameType, int score, double wpm, double acc) {
+        if (userId <= 0 || gameType == null) return false;
+        GamePersonalBest pb = getPersonalBest(userId, gameType);
+        if (pb == null) {
+            return score > 0 || wpm > 0 || acc > 0;
+        }
+        return score > pb.highScore || wpm > pb.bestWpm || acc > pb.bestAccuracy;
+    }
+
+    public void updateSessionXp(int sessionId, int xpEarned) {
+        if (sessionId <= 0) return;
+        synchronized (DatabaseManager.getInstance().getLock()) {
+            try (Connection c = DatabaseManager.getInstance().getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "UPDATE game_sessions SET xp_earned = ? WHERE id = ?")) {
+                ps.setInt(1, xpEarned);
+                ps.setInt(2, sessionId);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                System.err.println("Error updating session XP: " + e.getMessage());
+            }
+        }
     }
 
     public GamePersonalBest getPersonalBest(int userId, String gameType) {
@@ -211,5 +261,25 @@ public class GameDAO {
             }
         }
         return 0;
+    }
+
+    public String getFavoriteGameType(int userId) {
+        if (userId <= 0) return null;
+        synchronized (DatabaseManager.getInstance().getLock()) {
+            try (Connection c = DatabaseManager.getInstance().getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                     "SELECT game_type, COUNT(*) as cnt FROM game_sessions WHERE user_id = ? " +
+                     "GROUP BY game_type ORDER BY cnt DESC, game_type ASC LIMIT 1")) {
+                ps.setInt(1, userId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("game_type");
+                    }
+                }
+            } catch (SQLException e) {
+                System.err.println("Error calculating favorite game type: " + e.getMessage());
+            }
+        }
+        return null;
     }
 }
