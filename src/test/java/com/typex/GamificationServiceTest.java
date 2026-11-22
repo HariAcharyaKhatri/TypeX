@@ -5,6 +5,7 @@ import com.typex.database.DatabaseInitializer;
 import com.typex.database.DatabaseManager;
 import com.typex.model.*;
 import com.typex.service.GamificationService;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class GamificationServiceTest {
+    private static java.nio.file.Path isolatedDb;
     private static UserDAO userDAO;
     private static GamificationService gamificationService;
     private static User testUser;
@@ -21,9 +23,14 @@ public class GamificationServiceTest {
     @BeforeAll
     public static void setup() throws Exception {
         System.setProperty("java.awt.headless", "true");
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
         userDAO = new UserDAO();
         gamificationService = new GamificationService();
+    }
+
+    @AfterAll
+    public static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @BeforeEach

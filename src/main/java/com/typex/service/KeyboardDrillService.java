@@ -109,7 +109,48 @@ public final class KeyboardDrillService {
             sb.append(c);
         }
 
-        return sb.length() > 0 ? sb.toString() : "asdfjkl;";
+        if (sb.length() == 0) {
+            // Layout-aware fallback: extract all printable non-modifier characters from the layout
+            for (List<KeyDef> row : layout.rows) {
+                addNonModifierChars(row, chars);
+            }
+            for (char c : chars) {
+                sb.append(c);
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Filters historical error characters against the active layout.
+     * Retains only characters supported by the layout. If none remain,
+     * cleanly falls back to the active layout's dynamic Home Row pool.
+     */
+    public static String filterWeakKeys(LayoutInfo layout, Collection<Character> errorChars) {
+        if (layout == null) layout = KeyboardLayout.getLayout("US_QWERTY");
+        if (errorChars == null || errorChars.isEmpty()) {
+            return getDrillPool(layout, "Home Row");
+        }
+
+        Set<Character> valid = new LinkedHashSet<>();
+        for (Character ch : errorChars) {
+            if (ch == null) continue;
+            char c = Character.toLowerCase(ch);
+            if (layout.containsChar(c)) {
+                valid.add(c);
+            }
+        }
+
+        if (valid.isEmpty()) {
+            return getDrillPool(layout, "Home Row");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (char c : valid) {
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     private static boolean isLeftHandFinger(Finger f) {

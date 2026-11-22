@@ -35,6 +35,7 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
     // Active Game Container
     private final JPanel gameContainer = new JPanel(new BorderLayout());
     private BaseGamePanel currentGamePanel = null;
+    private final java.util.concurrent.atomic.AtomicLong refreshSequence = new java.util.concurrent.atomic.AtomicLong(0);
 
     public GamesPanel(MainFrame frame) {
         this.frame = frame;
@@ -200,8 +201,17 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
 
     @Override
     public void refresh() {
-        if (frame.getUser() == null) return;
+        if (frame == null || frame.getUser() == null) {
+            totalPlayedCard.setValue("0");
+            totalScoreCard.setValue("0");
+            favoriteGameCard.setValue("No games yet");
+            gamesGrid.removeAll();
+            gamesGrid.revalidate();
+            gamesGrid.repaint();
+            return;
+        }
         final int uid = frame.getUser().id;
+        final long thisSeq = refreshSequence.incrementAndGet();
 
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             int totalGames = 0;
@@ -220,6 +230,14 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
 
             @Override
             protected void done() {
+                // Reject stale async response if another refresh was triggered or user switched
+                if (thisSeq != refreshSequence.get()) {
+                    return;
+                }
+                if (frame.getUser() == null || frame.getUser().id != uid) {
+                    return;
+                }
+
                 totalPlayedCard.setValue(String.format("%,d", totalGames));
                 totalScoreCard.setValue(String.format("%,d", totalScore));
 
@@ -231,9 +249,11 @@ public class GamesPanel extends JPanel implements MainFrame.Refreshable, MainFra
                 favoriteGameCard.setValue(favDisplay);
 
                 gamesGrid.removeAll();
-                for (GameType gt : GameType.values()) {
-                    GamePersonalBest pb = pbs.get(gt.id.toLowerCase());
-                    gamesGrid.add(createGameCard(gt, pb));
+                if (pbs != null) {
+                    for (GameType gt : GameType.values()) {
+                        GamePersonalBest pb = pbs.get(gt.id.toLowerCase());
+                        gamesGrid.add(createGameCard(gt, pb));
+                    }
                 }
                 gamesGrid.revalidate();
                 gamesGrid.repaint();

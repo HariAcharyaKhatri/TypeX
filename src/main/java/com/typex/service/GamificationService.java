@@ -16,6 +16,29 @@ public class GamificationService {
     private final StatisticsDAO statsDao = new StatisticsDAO();
     private final LessonDAO lessonDao = new LessonDAO();
     private final LessonService lessonService = new LessonService();
+    private final GameDAO gameDao = new GameDAO();
+
+    public static class GameCompletionResult {
+        public final boolean success;
+        public final boolean isNewPb;
+        public final SessionReward reward;
+        public final String errorMessage;
+
+        public GameCompletionResult(boolean success, boolean isNewPb, SessionReward reward, String errorMessage) {
+            this.success = success;
+            this.isNewPb = isNewPb;
+            this.reward = reward;
+            this.errorMessage = errorMessage;
+        }
+
+        public static GameCompletionResult success(boolean isNewPb, SessionReward reward) {
+            return new GameCompletionResult(true, isNewPb, reward, null);
+        }
+
+        public static GameCompletionResult failure(String errorMessage) {
+            return new GameCompletionResult(false, false, null, errorMessage);
+        }
+    }
 
     public static class SessionReward {
         public int xpGained;
@@ -283,5 +306,40 @@ public class GamificationService {
 
         session.xpEarned = earnedXp;
         return reward;
+    }
+
+    /**
+     * Atomically processes game gamification rewards and persists the session
+     * into SQLite within a single transactional boundary. If any database
+     * operation fails, all associated changes are rolled back.
+     */
+    public GameCompletionResult recordGameCompletion(int userId, GameSession session) {
+        if (session == null || userId <= 0) {
+            SessionReward guestReward = new SessionReward();
+            guestReward.xpGained = 0;
+            return GameCompletionResult.success(false, guestReward);
+        }
+
+        final GameCompletionResult[] resultHolder = new GameCompletionResult[1];
+
+        try {
+            com.typex.database.DatabaseManager.getInstance().executeTransaction(c -> {
+                // 1. Evaluate personal best across Score, Level, WPM, and Accuracy
+                boolean isNewPb = gameDao.isPersonalBest(userId, session.gameType, session.score, session.levelReached, session.wpm, session.accuracy);
+
+                // 2. Compute gamification updates atomically within this transaction
+                SessionReward reward = recordGameSession(userId, session, isNewPb);
+
+                // 3. Persist session and update personal bests in the database atomically
+                boolean pbRecorded = gameDao.recordSession(session);
+
+                resultHolder[0] = GameCompletionResult.success(isNewPb || pbRecorded, reward);
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to atomically record game completion: " + e.getMessage());
+            return GameCompletionResult.failure(e.getMessage());
+        }
+
+        return resultHolder[0] != null ? resultHolder[0] : GameCompletionResult.failure("Unknown error completing game session");
     }
 }

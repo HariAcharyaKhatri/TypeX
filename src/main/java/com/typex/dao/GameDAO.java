@@ -61,7 +61,7 @@ public class GameDAO {
                 }
 
                 if (existingPb == null) {
-                    if (session.score > 0 || session.wpm > 0 || session.accuracy > 0) {
+                    if (session.score > 0 || session.levelReached > 1 || session.wpm > 0 || session.accuracy > 0) {
                         isNewPb[0] = true;
                         String insPb = """
                             INSERT INTO game_personal_bests(user_id, game_type, high_score, highest_level,
@@ -109,18 +109,23 @@ public class GameDAO {
             });
         } catch (SQLException e) {
             System.err.println("Error recording game session atomically: " + e.getMessage());
+            throw new com.typex.database.DataAccessException("Failed to record game session: " + e.getMessage(), e);
         }
 
         return isNewPb[0];
     }
 
-    public boolean isPersonalBest(int userId, String gameType, int score, double wpm, double acc) {
+    public boolean isPersonalBest(int userId, String gameType, int score, int level, double wpm, double acc) {
         if (userId <= 0 || gameType == null) return false;
         GamePersonalBest pb = getPersonalBest(userId, gameType);
         if (pb == null) {
-            return score > 0 || wpm > 0 || acc > 0;
+            return score > 0 || level > 1 || wpm > 0 || acc > 0;
         }
-        return score > pb.highScore || wpm > pb.bestWpm || acc > pb.bestAccuracy;
+        return score > pb.highScore || level > pb.highestLevel || wpm > pb.bestWpm || acc > pb.bestAccuracy;
+    }
+
+    public boolean isPersonalBest(int userId, String gameType, int score, double wpm, double acc) {
+        return isPersonalBest(userId, gameType, score, 1, wpm, acc);
     }
 
     public void updateSessionXp(int sessionId, int xpEarned) {

@@ -10,6 +10,7 @@ import com.typex.ui.components.VirtualKeyboard;
 import com.typex.util.KeyboardLayout;
 import com.typex.util.KeyboardLayout.Finger;
 import com.typex.util.KeyboardLayout.LayoutInfo;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -20,11 +21,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class Phase4DesignAndLayoutTest {
 
+    private static java.nio.file.Path isolatedDb;
+
     @BeforeAll
     static void init() throws Exception {
         System.setProperty("java.awt.headless", "true");
-        DatabaseManager.getInstance().initialize();
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @Test

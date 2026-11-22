@@ -201,18 +201,16 @@ public class KeyboardTrainerPanel extends JPanel implements MainFrame.Refreshabl
             protected void done() {
                 try {
                     List<CharacterError> errs = get();
-                    if (errs == null || errs.isEmpty()) {
-                        currentPool = KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
-                    } else {
-                        StringBuilder sb = new StringBuilder();
+                    List<Character> charList = new ArrayList<>();
+                    if (errs != null) {
                         for (CharacterError ce : errs) {
                             char c = (char) ce.charCode;
                             if (Character.isLetterOrDigit(c)) {
-                                sb.append(Character.toLowerCase(c));
+                                charList.add(c);
                             }
                         }
-                        currentPool = sb.length() > 0 ? sb.toString() : KeyboardDrillService.getDrillPool(keyboard.getLayoutInfo(), "Home Row");
                     }
+                    currentPool = KeyboardDrillService.filterWeakKeys(keyboard.getLayoutInfo(), charList);
                     resetStats();
                     nextTargetKey();
                 } catch (Exception ignored) {

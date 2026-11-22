@@ -8,6 +8,7 @@ import com.typex.model.PracticeRecommendation;
 import com.typex.model.TypingResult;
 import com.typex.model.User;
 import com.typex.service.RecommendationService;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class RecommendationServiceTest {
+    private static java.nio.file.Path isolatedDb;
     private static UserDAO userDAO;
     private static RecommendationService recService;
     private static CharacterErrorDAO errorDAO;
@@ -28,11 +30,16 @@ public class RecommendationServiceTest {
     @BeforeAll
     public static void setup() throws Exception {
         System.setProperty("java.awt.headless", "true");
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
         userDAO = new UserDAO();
         recService = new RecommendationService();
         errorDAO = new CharacterErrorDAO();
         resultDAO = new TypingResultDAO();
+    }
+
+    @AfterAll
+    public static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @BeforeEach

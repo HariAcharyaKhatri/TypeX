@@ -9,6 +9,7 @@ import com.typex.service.GamificationService;
 import com.typex.ui.MainFrame;
 import com.typex.util.IconManager;
 import com.typex.util.SoundManager;
+import com.typex.util.TimeSource;
 
 import javax.swing.*;
 import java.awt.*;
@@ -32,9 +33,11 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
 
     protected State gameState = State.READY;
     protected Timer gameLoopTimer;
+    protected TimeSource timeSource = TimeSource.SYSTEM;
     protected long sessionStartNanos;
     protected long pauseStartNanos = 0;
     protected long accumulatedPausedNanos = 0;
+    protected long finalActiveElapsedNanos = -1;
     protected int elapsedSeconds = 0;
 
     // Core Metrics
@@ -229,6 +232,14 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         }
     }
 
+    public void setTimeSource(TimeSource timeSource) {
+        this.timeSource = timeSource != null ? timeSource : TimeSource.SYSTEM;
+    }
+
+    public TimeSource getTimeSource() {
+        return timeSource;
+    }
+
     public void startGame() {
         gameState = State.PLAYING;
         score = 0;
@@ -238,9 +249,10 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         correctKeystrokes = 0;
         errors = 0;
         elapsedSeconds = 0;
-        sessionStartNanos = System.nanoTime();
+        sessionStartNanos = timeSource.nanoTime();
         pauseStartNanos = 0;
         accumulatedPausedNanos = 0;
+        finalActiveElapsedNanos = -1;
 
         hideOverlays();
         onGameStart();
@@ -252,7 +264,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
     public void pauseGame() {
         if (gameState != State.PLAYING) return;
         gameState = State.PAUSED;
-        pauseStartNanos = System.nanoTime();
+        pauseStartNanos = timeSource.nanoTime();
         gameLoopTimer.stop();
         showPauseOverlay();
     }
@@ -260,7 +272,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
     public void resumeGame() {
         if (gameState != State.PAUSED) return;
         if (pauseStartNanos > 0) {
-            accumulatedPausedNanos += (System.nanoTime() - pauseStartNanos);
+            accumulatedPausedNanos += (timeSource.nanoTime() - pauseStartNanos);
             pauseStartNanos = 0;
         }
         gameState = State.PLAYING;
@@ -276,7 +288,10 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
 
     public long getActiveElapsedNanos() {
         if (gameState == State.READY) return 0;
-        long current = (gameState == State.PAUSED && pauseStartNanos > 0) ? pauseStartNanos : System.nanoTime();
+        if (gameState == State.GAME_OVER && finalActiveElapsedNanos >= 0) {
+            return finalActiveElapsedNanos;
+        }
+        long current = (gameState == State.PAUSED && pauseStartNanos > 0) ? pauseStartNanos : timeSource.nanoTime();
         long totalElapsed = current - sessionStartNanos;
         long active = totalElapsed - accumulatedPausedNanos;
         return Math.max(0, active);
@@ -288,7 +303,7 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         }
         if (gameState == State.PLAYING) {
             if (pauseStartNanos == 0) {
-                pauseStartNanos = System.nanoTime();
+                pauseStartNanos = timeSource.nanoTime();
             }
             gameState = State.PAUSED;
         }
@@ -296,31 +311,41 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
 
     public void endGame() {
         if (gameState == State.GAME_OVER) return;
+        long endNanos = timeSource.nanoTime();
         if (gameState == State.PAUSED && pauseStartNanos > 0) {
-            accumulatedPausedNanos += (System.nanoTime() - pauseStartNanos);
+            accumulatedPausedNanos += (endNanos - pauseStartNanos);
             pauseStartNanos = 0;
         }
         gameState = State.GAME_OVER;
-        gameLoopTimer.stop();
-        elapsedSeconds = (int) Math.max(1, getActiveElapsedNanos() / 1_000_000_000L);
+        if (gameLoopTimer != null && gameLoopTimer.isRunning()) {
+            gameLoopTimer.stop();
+        }
+        long totalElapsed = endNanos - sessionStartNanos;
+        finalActiveElapsedNanos = Math.max(0, totalElapsed - accumulatedPausedNanos);
+        elapsedSeconds = (int) Math.max(1, finalActiveElapsedNanos / 1_000_000_000L);
 
         double acc = totalKeystrokes > 0 ? (correctKeystrokes * 100.0 / totalKeystrokes) : 100.0;
         double wpm = (correctKeystrokes / 5.0) / (elapsedSeconds / 60.0);
         if (wpm < 0 || Double.isNaN(wpm)) wpm = 0.0;
 
-        int uid = frame.getUser() != null ? frame.getUser().id : 1;
-        GameSession session = new GameSession(uid, gameType.id, score, level, wordsCompleted, acc, wpm, elapsedSeconds);
+        Integer uid = (frame != null && frame.getUser() != null) ? frame.getUser().id : null;
 
-        // Pre-check personal best so XP includes accurate PB bonus
-        boolean isNewPb = gameDao.isPersonalBest(uid, gameType.id, score, wpm, acc);
-
-        // Gamification XP (populates session.xpEarned)
-        GamificationService.SessionReward reward = gamification.recordGameSession(uid, session, isNewPb);
-
-        // Record in SQLite atomically with accurate session.xpEarned and independent PBs
-        boolean persistedPb = gameDao.recordSession(session);
-
-        showGameOverOverlay(session, isNewPb || persistedPb, reward);
+        if (uid != null && uid > 0) {
+            GameSession session = new GameSession(uid, gameType.id, score, level, wordsCompleted, acc, wpm, elapsedSeconds);
+            GamificationService.GameCompletionResult result = gamification.recordGameCompletion(uid, session);
+            if (result.success) {
+                showGameOverOverlay(session, result.isNewPb, result.reward);
+            } else {
+                showGameOverErrorOverlay(session, result.errorMessage);
+            }
+        } else {
+            // Guest or headless test session: do not touch DB or assign to arbitrary user ID
+            GameSession guestSession = new GameSession(0, gameType.id, score, level, wordsCompleted, acc, wpm, elapsedSeconds);
+            guestSession.xpEarned = 0;
+            GamificationService.SessionReward guestReward = new GamificationService.SessionReward();
+            guestReward.xpGained = 0;
+            showGameOverOverlay(guestSession, false, guestReward);
+        }
     }
 
     private void confirmExit() {
@@ -492,6 +517,107 @@ public abstract class BaseGamePanel extends JPanel implements MainFrame.ThemeAwa
         card.add(statsRow);
         card.add(Box.createVerticalStrut(8));
         card.add(xpLbl);
+        card.add(Box.createVerticalStrut(20));
+        card.add(btnRow);
+
+        gameOverOverlay.add(card);
+        layeredPane.add(gameOverOverlay, JLayeredPane.MODAL_LAYER);
+        gameOverOverlay.setVisible(true);
+        relayoutLayers();
+    }
+
+    private void showGameOverErrorOverlay(GameSession session, String errorMsg) {
+        if (gameOverOverlay != null) {
+            layeredPane.remove(gameOverOverlay);
+        }
+
+        gameOverOverlay = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setColor(new Color(0, 0, 0, 180));
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                g2.dispose();
+            }
+        };
+        gameOverOverlay.setOpaque(false);
+
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(ThemeManager.bgCard());
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ThemeManager.colorError(), 2),
+                BorderFactory.createEmptyBorder(28, 40, 28, 40)));
+
+        JLabel titleLbl = new JLabel("GAME OVER");
+        titleLbl.setFont(ThemeManager.getHeadingFont(24f));
+        titleLbl.setForeground(ThemeManager.fgPrimary());
+        titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel errLbl = new JLabel("Could not save session to database");
+        errLbl.setFont(ThemeManager.getBodyFont(13f));
+        errLbl.setForeground(ThemeManager.colorError());
+        errLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel scoreVal = new JLabel(String.format("%,d", session.score));
+        scoreVal.setFont(ThemeManager.getMonoFont(38f));
+        scoreVal.setForeground(ThemeManager.accent());
+        scoreVal.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel scoreSub = new JLabel("FINAL SCORE");
+        scoreSub.setFont(ThemeManager.getMonoFont(11f));
+        scoreSub.setForeground(ThemeManager.fgMuted());
+        scoreSub.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // Stats summary row
+        JPanel statsRow = new JPanel(new GridLayout(1, 4, 16, 0));
+        statsRow.setOpaque(false);
+        statsRow.setBorder(BorderFactory.createEmptyBorder(16, 0, 16, 0));
+        statsRow.add(createStatPill("LEVEL", new JLabel(String.valueOf(session.levelReached))));
+        statsRow.add(createStatPill("WORDS", new JLabel(String.valueOf(session.wordsCompleted))));
+        statsRow.add(createStatPill("ACCURACY", new JLabel(String.format("%.0f%%", session.accuracy))));
+        statsRow.add(createStatPill("WPM", new JLabel(String.format("%.0f", session.wpm))));
+
+        // Notice Banner
+        JLabel noticeLbl = new JLabel("+0 XP (Persistence Failed)");
+        noticeLbl.setFont(ThemeManager.getMonoFont(13f));
+        noticeLbl.setForeground(ThemeManager.fgMuted());
+        noticeLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // Buttons
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 0));
+        btnRow.setOpaque(false);
+
+        JButton againBtn = new JButton("Play Again");
+        againBtn.setFont(ThemeManager.getBodyFont(14f));
+        againBtn.setBackground(ThemeManager.accent());
+        againBtn.setForeground(ThemeManager.fgOnAccent());
+        againBtn.setFocusPainted(false);
+        againBtn.setIcon(IconManager.getIcon("restart", 16, ThemeManager.fgOnAccent()));
+        againBtn.addActionListener(e -> restartGame());
+
+        JButton exitB = new JButton("Exit to Library");
+        exitB.setFont(ThemeManager.getBodyFont(14f));
+        exitB.setFocusPainted(false);
+        exitB.setIcon(IconManager.getIcon("exit", 16, ThemeManager.fgPrimary()));
+        exitB.addActionListener(e -> {
+            cleanup();
+            if (onExitToCatalog != null) onExitToCatalog.run();
+        });
+
+        btnRow.add(againBtn);
+        btnRow.add(exitB);
+
+        card.add(titleLbl);
+        card.add(Box.createVerticalStrut(4));
+        card.add(errLbl);
+        card.add(Box.createVerticalStrut(12));
+        card.add(scoreVal);
+        card.add(scoreSub);
+        card.add(Box.createVerticalStrut(10));
+        card.add(statsRow);
+        card.add(Box.createVerticalStrut(8));
+        card.add(noticeLbl);
         card.add(Box.createVerticalStrut(20));
         card.add(btnRow);
 

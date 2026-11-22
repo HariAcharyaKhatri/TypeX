@@ -10,6 +10,7 @@ public final class DatabaseManager {
     private static DatabaseManager instance;
     private Connection conn;
     private Connection proxyConn;
+    private Path customDbPath = null;
     private final Object lock = new Object();
 
     private DatabaseManager() {}
@@ -17,6 +18,27 @@ public final class DatabaseManager {
     public static synchronized DatabaseManager getInstance() {
         if (instance == null) instance = new DatabaseManager();
         return instance;
+    }
+
+    public void setDatabasePath(Path path) {
+        synchronized (lock) {
+            close();
+            this.customDbPath = path;
+        }
+    }
+
+    public void resetDatabasePath() {
+        synchronized (lock) {
+            close();
+            this.customDbPath = null;
+        }
+    }
+
+    public Path getDatabasePath() {
+        synchronized (lock) {
+            if (customDbPath != null) return customDbPath;
+            return Paths.get(System.getProperty("user.home"), ".typex", "typex.db");
+        }
     }
 
     public void initialize() throws SQLException {
@@ -27,9 +49,17 @@ public final class DatabaseManager {
                 } catch (SQLException ignored) {}
             }
             try {
-                Path dir = Paths.get(System.getProperty("user.home"), ".typex");
-                Files.createDirectories(dir);
-                Path db = dir.resolve("typex.db");
+                Path db;
+                if (customDbPath != null) {
+                    if (customDbPath.getParent() != null) {
+                        Files.createDirectories(customDbPath.getParent());
+                    }
+                    db = customDbPath;
+                } else {
+                    Path dir = Paths.get(System.getProperty("user.home"), ".typex");
+                    Files.createDirectories(dir);
+                    db = dir.resolve("typex.db");
+                }
                 conn = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
                 try (Statement st = conn.createStatement()) {
                     st.execute("PRAGMA foreign_keys = ON;");
@@ -85,6 +115,16 @@ public final class DatabaseManager {
         synchronized (lock) {
             Connection c = getConnection();
             boolean autoCommit = c.getAutoCommit();
+            if (!autoCommit) {
+                // Nested transaction call: execute within the current active transaction boundary without committing early
+                try {
+                    action.execute(c);
+                } catch (Exception e) {
+                    if (e instanceof SQLException sqle) throw sqle;
+                    throw new SQLException("Transaction action failed", e);
+                }
+                return;
+            }
             try {
                 c.setAutoCommit(false);
                 action.execute(c);
@@ -110,6 +150,8 @@ public final class DatabaseManager {
                     conn.close();
                 }
             } catch (SQLException ignored) {}
+            conn = null;
+            proxyConn = null;
         }
     }
 }

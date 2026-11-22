@@ -7,6 +7,7 @@ import com.typex.database.DatabaseManager;
 import com.typex.model.KeyboardSession;
 import com.typex.model.User;
 import com.typex.ui.components.VirtualKeyboard;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -16,10 +17,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class KeyboardTrainerTest {
 
+    private static java.nio.file.Path isolatedDb;
+
     @BeforeAll
     static void init() throws Exception {
-        DatabaseManager.getInstance().initialize();
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @Test

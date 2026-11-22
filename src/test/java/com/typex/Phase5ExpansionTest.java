@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class Phase5ExpansionTest {
 
+    private static java.nio.file.Path isolatedDb;
     private static User testUser;
     private static final UserDAO userDAO = new UserDAO();
     private static final LessonDAO lessonDAO = new LessonDAO();
@@ -33,10 +34,15 @@ public class Phase5ExpansionTest {
 
     @BeforeAll
     static void setup() throws SQLException {
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
         String testUsername = "Phase5Tester_" + System.currentTimeMillis();
         testUser = userDAO.create(testUsername);
         assertNotNull(testUser, "Test user must be initialized");
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @Test

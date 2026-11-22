@@ -16,10 +16,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DatabasePersistenceTest {
 
+    private static java.nio.file.Path isolatedDb;
+
     @BeforeAll
     static void setup() throws Exception {
-        DatabaseManager.getInstance().initialize();
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @Test

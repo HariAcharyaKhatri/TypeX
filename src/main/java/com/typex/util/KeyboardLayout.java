@@ -103,7 +103,16 @@ public class KeyboardLayout {
 
         public Finger getFingerForChar(char c) {
             KeyDef k = findKeyForChar(c);
-            return k != null ? k.finger : Finger.THUMB;
+            return k != null ? k.finger : null;
+        }
+
+        public boolean containsChar(char c) {
+            if (c == ' ') return true;
+            if (findKeyForChar(c) != null) return true;
+            if (Character.isLetter(c)) {
+                return findKeyForChar(Character.toLowerCase(c)) != null || findKeyForChar(Character.toUpperCase(c)) != null;
+            }
+            return false;
         }
 
         @Override
@@ -198,20 +207,15 @@ public class KeyboardLayout {
         if (layout == null) layout = ALL_LAYOUTS.get("US_QWERTY");
 
         Finger f = layout.getFingerForChar(c);
-        if (f == null) {
-            // Check lowercase or uppercase fallback
-            if (Character.isLetter(c)) {
-                f = layout.getFingerForChar(Character.toLowerCase(c));
+        if (f == null && Character.isLetter(c)) {
+            f = layout.getFingerForChar(Character.toLowerCase(c));
+            if (f == null) {
+                f = layout.getFingerForChar(Character.toUpperCase(c));
             }
         }
 
         if (f == null) {
-            LayoutInfo us = ALL_LAYOUTS.get("US_QWERTY");
-            f = (us != null) ? us.getFingerForChar(c) : null;
-        }
-
-        if (f == null) {
-            return "Target Finger: Any Free Finger";
+            return "Unsupported Character";
         }
 
         boolean shifted = layout.requiresShift(c);

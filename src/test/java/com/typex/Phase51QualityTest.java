@@ -24,15 +24,21 @@ import static org.junit.jupiter.api.Assertions.*;
 public class Phase51QualityTest {
 
     private static User testUser;
+    private static java.nio.file.Path testDbPath;
     private static final UserDAO userDAO = new UserDAO();
     private static final GameDAO gameDAO = new GameDAO();
 
     @BeforeAll
     static void setup() throws SQLException {
-        DatabaseInitializer.initialize();
+        testDbPath = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
         String testUsername = "Phase51Tester_" + System.currentTimeMillis();
         testUser = userDAO.create(testUsername);
         assertNotNull(testUser, "Test user must be initialized");
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(testDbPath);
     }
 
     @Test
@@ -162,31 +168,33 @@ public class Phase51QualityTest {
 
     @Test
     @Order(4)
-    void testGameActiveMonotonicTimeAccounting() throws InterruptedException {
-        // Subclass BaseGamePanel to test pause/resume monotonic timing model
+    void testGameActiveMonotonicTimeAccounting() {
+        // Subclass BaseGamePanel with deterministic TestClock (no flaky Thread.sleep)
         TestGamePanel game = new TestGamePanel();
+        com.typex.testutil.TestClock clock = new com.typex.testutil.TestClock(1_000_000_000L);
+        game.setTimeSource(clock);
         game.startGame();
 
         // Simulate active play of 50ms
-        Thread.sleep(50);
+        clock.advanceMillis(50);
         long active1 = game.getActiveElapsedNanos();
-        assertTrue(active1 >= 40_000_000L, "Active time should be at least 40ms: " + active1);
+        assertEquals(50_000_000L, active1, "Active time must match simulated clock advancement");
 
         // Pause game for 100ms
         game.pauseGame();
         long pausedAt = game.getActiveElapsedNanos();
-        Thread.sleep(100);
+        clock.advanceMillis(100);
         long pausedCheck = game.getActiveElapsedNanos();
         // Time while paused should be completely frozen
         assertEquals(pausedAt, pausedCheck, "Active elapsed time must not increment while paused");
+        assertEquals(50_000_000L, pausedCheck);
 
         // Resume game and play for another 50ms
         game.resumeGame();
-        Thread.sleep(50);
+        clock.advanceMillis(50);
         long active2 = game.getActiveElapsedNanos();
-        // Total active time should be around 100ms, strictly excluding the 100ms paused interval
-        assertTrue(active2 < 200_000_000L, "Active time must strictly exclude pause duration: " + active2);
-        assertTrue(active2 >= 80_000_000L, "Active time must accumulate active intervals: " + active2);
+        // Total active time should be exactly 100ms, strictly excluding the 100ms paused interval
+        assertEquals(100_000_000L, active2, "Active time must strictly exclude pause duration");
 
         game.cleanup();
     }

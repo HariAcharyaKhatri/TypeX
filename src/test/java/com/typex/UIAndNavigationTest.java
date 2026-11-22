@@ -7,6 +7,7 @@ import com.typex.database.DatabaseManager;
 import com.typex.model.User;
 import com.typex.ui.MainFrame;
 import com.typex.ui.pages.*;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -17,11 +18,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class UIAndNavigationTest {
 
+    private static java.nio.file.Path isolatedDb;
+
     @BeforeAll
     static void init() throws Exception {
         System.setProperty("java.awt.headless", "true");
-        DatabaseManager.getInstance().initialize();
-        DatabaseInitializer.initialize();
+        isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        com.typex.testutil.TestDatabaseHelper.teardownIsolatedDatabase(isolatedDb);
     }
 
     @Test
