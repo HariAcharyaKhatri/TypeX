@@ -15,6 +15,7 @@ public class TopBar extends JPanel {
     private final JLabel streakBadge = new JLabel();
     private final JLabel dateLabel = new JLabel();
     private final JButton themeBtn;
+    private final JButton soundBtn;
     private final JButton profileBtn;
 
     public TopBar(MainFrame frame, Runnable onTheme, Runnable onProfile) {
@@ -40,20 +41,38 @@ public class TopBar extends JPanel {
         userBadge.setIcon(IconManager.getIcon(IconManager.PROFILE, 14, ThemeManager.accent()));
         userBadge.setIconTextGap(6);
 
+        soundBtn = pill(com.typex.util.SoundManager.isEnabled() ? "Sound" : "Muted",
+                com.typex.util.SoundManager.isEnabled() ? IconManager.SOUND_ON : IconManager.SOUND_OFF);
+        soundBtn.setToolTipText("Toggle Sound Effects (Ctrl+M)");
+        soundBtn.addActionListener(e -> {
+            com.typex.util.SoundManager.toggleEnabled();
+            updateSoundPill();
+        });
+
         themeBtn = pill("Theme", IconManager.THEME);
+        themeBtn.setToolTipText("Toggle Dark/Light Mode (Ctrl+T)");
         themeBtn.addActionListener(e -> onTheme.run());
 
         profileBtn = pill("Profile", IconManager.PROFILE);
+        profileBtn.setToolTipText("Manage Profiles & Goals (Ctrl+P)");
         profileBtn.addActionListener(e -> onProfile.run());
 
         right.add(streakBadge);
         right.add(userBadge);
+        right.add(soundBtn);
         right.add(themeBtn);
         right.add(profileBtn);
         add(right, BorderLayout.EAST);
 
         applyTheme();
         refresh();
+    }
+
+    private void updateSoundPill() {
+        if (soundBtn == null) return;
+        boolean on = com.typex.util.SoundManager.isEnabled();
+        soundBtn.setText(on ? "Sound" : "Muted");
+        updatePill(soundBtn, on ? IconManager.SOUND_ON : IconManager.SOUND_OFF);
     }
 
     public void applyTheme() {
@@ -74,6 +93,7 @@ public class TopBar extends JPanel {
         userBadge.setForeground(ThemeManager.accent());
         userBadge.setIcon(IconManager.getIcon(IconManager.PROFILE, 14, ThemeManager.accent()));
 
+        updateSoundPill();
         updatePill(themeBtn, IconManager.THEME);
         updatePill(profileBtn, IconManager.PROFILE);
         repaint();
@@ -82,6 +102,7 @@ public class TopBar extends JPanel {
     public void refresh() {
         LocalDate now = LocalDate.now();
         dateLabel.setText(now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")));
+        updateSoundPill();
         if (frame != null && frame.getUser() != null) {
             try {
                 com.typex.model.UserXP xp = new com.typex.dao.UserXPDAO().getForUser(frame.getUser().id);

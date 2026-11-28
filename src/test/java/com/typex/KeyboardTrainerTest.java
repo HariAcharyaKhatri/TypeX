@@ -43,7 +43,7 @@ public class KeyboardTrainerTest {
         UserDAO userDao = new UserDAO();
         KeyboardSessionDAO sessionDao = new KeyboardSessionDAO();
 
-        User u = userDao.create("KeyboardTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("KeyboardTester"));
 
         KeyboardSession s = new KeyboardSession();
         s.userId = u.id;

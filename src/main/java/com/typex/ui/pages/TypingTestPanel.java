@@ -596,6 +596,12 @@ public class TypingTestPanel extends JPanel implements MainFrame.Refreshable, Ma
 
         final int actualDuration = Math.max(1, (int) Math.round(engine.elapsedSeconds()));
 
+        if (frame.getUser() == null) {
+            frame.setDistractionFree(false);
+            cardLayout.show(cardsPanel, "CONFIG");
+            return;
+        }
+
         TypingResult r = new TypingResult();
         r.userId = frame.getUser().id;
         r.category = (String) categoryBox.getSelectedItem();

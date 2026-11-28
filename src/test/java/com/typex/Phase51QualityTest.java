@@ -31,7 +31,7 @@ public class Phase51QualityTest {
     @BeforeAll
     static void setup() throws SQLException {
         testDbPath = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
-        String testUsername = "Phase51Tester_" + System.currentTimeMillis();
+        String testUsername = com.typex.testutil.TestDatabaseHelper.uniqueUsername("Phase51Tester");
         testUser = userDAO.create(testUsername);
         assertNotNull(testUser, "Test user must be initialized");
     }
@@ -263,7 +263,7 @@ public class Phase51QualityTest {
     @Test
     @Order(7)
     void testFavoriteGameCalculationAndTieBreaking() {
-        String testFavUser = "FavTester_" + System.currentTimeMillis();
+        String testFavUser = com.typex.testutil.TestDatabaseHelper.uniqueUsername("FavTester");
         User favUser = userDAO.create(testFavUser);
         assertNotNull(favUser);
 

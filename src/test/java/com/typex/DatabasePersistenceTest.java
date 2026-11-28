@@ -73,7 +73,7 @@ public class DatabasePersistenceTest {
     @Order(3)
     void userCreationAndProfileSwitching() {
         UserDAO dao = new UserDAO();
-        String testUsername = "TestUser_" + System.currentTimeMillis();
+        String testUsername = com.typex.testutil.TestDatabaseHelper.uniqueUsername("TestUser");
 
         User created = dao.create(testUsername);
         assertNotNull(created);
@@ -100,7 +100,7 @@ public class DatabasePersistenceTest {
         TypingResultDAO resultDao = new TypingResultDAO();
         StatisticsDAO statsDao = new StatisticsDAO();
 
-        User u = userDao.create("StatsTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("StatsTester"));
 
         TypingResult r = new TypingResult();
         r.userId = u.id;
@@ -143,7 +143,7 @@ public class DatabasePersistenceTest {
         UserDAO userDao = new UserDAO();
         CharacterErrorDAO charDao = new CharacterErrorDAO();
 
-        User u = userDao.create("CharErrorTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("CharErrorTester"));
 
         charDao.recordErrors(u.id, Map.of('e', 4, 't', 2, 'z', 10));
 
@@ -167,7 +167,7 @@ public class DatabasePersistenceTest {
         LessonDAO lessonDao = new LessonDAO();
         LessonService lessonService = new LessonService();
 
-        User u = userDao.create("LessonProgTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("LessonProgTester"));
         List<Lesson> lessons = lessonDao.findAll();
         assertFalse(lessons.isEmpty());
 
@@ -202,7 +202,7 @@ public class DatabasePersistenceTest {
         UserDAO userDao = new UserDAO();
         PersonalBestDAO pbDao = new PersonalBestDAO();
 
-        User u = userDao.create("PbTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("PbTester"));
 
         // First attempt sets PB
         boolean isPb1 = pbDao.recordCandidate(u.id, "Sentences", 60, 45.0, 95.0);
@@ -234,7 +234,7 @@ public class DatabasePersistenceTest {
         DailyGoalDAO goalDao = new DailyGoalDAO();
         UserPreferenceDAO prefDao = new UserPreferenceDAO();
 
-        User u = userDao.create("GamifyDbTester_" + System.currentTimeMillis());
+        User u = userDao.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("GamifyDbTester"));
 
         // 1. XP
         UserXP xp = xpDao.getForUser(u.id);

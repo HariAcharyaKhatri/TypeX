@@ -44,6 +44,7 @@ public class StatisticsPanel extends JPanel implements MainFrame.Refreshable, Ma
 
     private final JTabbedPane tabbedPane = new JTabbedPane();
     private final JButton csvBtn = new JButton("Export CSV");
+    private final JButton jsonBtn = new JButton("Export JSON");
     private final JButton reportBtn = new JButton("Printable Report");
 
     public StatisticsPanel(MainFrame frame) {
@@ -106,10 +107,13 @@ public class StatisticsPanel extends JPanel implements MainFrame.Refreshable, Ma
 
         csvBtn.setFocusPainted(false);
         csvBtn.addActionListener(e -> exportCsv());
+        jsonBtn.setFocusPainted(false);
+        jsonBtn.addActionListener(e -> exportJson());
         reportBtn.setFocusPainted(false);
         reportBtn.addActionListener(e -> exportPrintable());
 
         bottom.add(csvBtn);
+        bottom.add(jsonBtn);
         bottom.add(reportBtn);
         add(bottom, BorderLayout.SOUTH);
 
@@ -129,6 +133,8 @@ public class StatisticsPanel extends JPanel implements MainFrame.Refreshable, Ma
 
         csvBtn.setBackground(ThemeManager.bgCard());
         csvBtn.setForeground(ThemeManager.fgPrimary());
+        jsonBtn.setBackground(ThemeManager.bgCard());
+        jsonBtn.setForeground(ThemeManager.fgPrimary());
         reportBtn.setBackground(ThemeManager.accent());
         reportBtn.setForeground(ThemeManager.fgOnAccent());
 
@@ -192,6 +198,38 @@ public class StatisticsPanel extends JPanel implements MainFrame.Refreshable, Ma
                         get();
                         JOptionPane.showMessageDialog(StatisticsPanel.this,
                                 "Analytics CSV exported successfully:\n" + targetFile.getAbsolutePath(),
+                                "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(StatisticsPanel.this,
+                                "Export failed: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            };
+            worker.execute();
+        }
+    }
+
+    private void exportJson() {
+        JFileChooser fc = new JFileChooser();
+        fc.setSelectedFile(new File("typex-analytics-data.json"));
+        if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File targetFile = fc.getSelectedFile();
+            if (frame.getUser() == null) return;
+            final int uid = frame.getUser().id;
+            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    List<TypingResult> rs = svc.recentFor(uid);
+                    ExportManager.exportJson(targetFile, rs);
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        get();
+                        JOptionPane.showMessageDialog(StatisticsPanel.this,
+                                "Analytics JSON exported successfully:\n" + targetFile.getAbsolutePath(),
                                 "Export Complete", JOptionPane.INFORMATION_MESSAGE);
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(StatisticsPanel.this,

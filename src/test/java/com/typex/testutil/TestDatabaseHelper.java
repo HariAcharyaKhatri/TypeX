@@ -15,7 +15,16 @@ import java.sql.SQLException;
  */
 public final class TestDatabaseHelper {
 
+    private static final java.util.concurrent.atomic.AtomicLong USER_SEQ = new java.util.concurrent.atomic.AtomicLong(1);
+
     private TestDatabaseHelper() {}
+
+    /**
+     * Generates a guaranteed unique username for test users to prevent SQLite unique constraint violations.
+     */
+    public static String uniqueUsername(String prefix) {
+        return (prefix != null ? prefix : "test_user") + "_" + System.nanoTime() + "_" + USER_SEQ.incrementAndGet();
+    }
 
     /**
      * Creates and initializes a fresh isolated temporary SQLite database.

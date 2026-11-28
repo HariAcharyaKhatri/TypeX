@@ -49,6 +49,7 @@ public final class IconManager {
     public static final String ACCURACY = "accuracy";
     public static final String SOUND_ON = "sound_on";
     public static final String SOUND_OFF = "sound_off";
+    public static final String SOUND = "sound_on";
     public static final String THEME = "theme";
     public static final String HEART = "heart";
     public static final String ROCKET = "rocket";

@@ -38,7 +38,7 @@ public class Phase52DataIntegrityTest {
     @BeforeAll
     static void setup() throws SQLException {
         isolatedDb = TestDatabaseHelper.initIsolatedDatabase();
-        testUser = userDAO.create("Phase52Tester_" + System.currentTimeMillis());
+        testUser = userDAO.create(TestDatabaseHelper.uniqueUsername("Phase52Tester"));
         assertNotNull(testUser);
     }
 
@@ -101,7 +101,7 @@ public class Phase52DataIntegrityTest {
     @Test
     @Order(3)
     void testPersonalBestHighestLevelAndMultiMetrics() {
-        User pbUser = userDAO.create("PbTester_" + System.currentTimeMillis());
+        User pbUser = userDAO.create(TestDatabaseHelper.uniqueUsername("PbTester"));
         assertNotNull(pbUser);
         int uid = pbUser.id;
         String gt = GameType.TYPING_SURVIVAL.id;

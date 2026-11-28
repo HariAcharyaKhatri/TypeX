@@ -35,7 +35,7 @@ public class Phase5ExpansionTest {
     @BeforeAll
     static void setup() throws SQLException {
         isolatedDb = com.typex.testutil.TestDatabaseHelper.initIsolatedDatabase();
-        String testUsername = "Phase5Tester_" + System.currentTimeMillis();
+        String testUsername = com.typex.testutil.TestDatabaseHelper.uniqueUsername("Phase5Tester");
         testUser = userDAO.create(testUsername);
         assertNotNull(testUser, "Test user must be initialized");
     }

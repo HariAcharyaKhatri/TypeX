@@ -130,7 +130,7 @@ public class Phase4DesignAndLayoutTest {
     @Test
     void testUserPreferenceKeyboardLayoutPersistence() {
         com.typex.dao.UserDAO userDAO = new com.typex.dao.UserDAO();
-        com.typex.model.User u = userDAO.create("Phase4Tester_" + System.currentTimeMillis());
+        com.typex.model.User u = userDAO.create(com.typex.testutil.TestDatabaseHelper.uniqueUsername("Phase4Tester"));
         assertNotNull(u);
 
         UserPreferenceDAO dao = new UserPreferenceDAO();

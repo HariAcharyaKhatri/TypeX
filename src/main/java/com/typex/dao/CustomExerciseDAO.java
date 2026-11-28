@@ -34,19 +34,28 @@ public class CustomExerciseDAO {
 
     public CustomExercise insert(CustomExercise e) {
         if (e == null) return null;
+        String title = (e.title != null ? e.title.trim() : "Untitled");
+        if (title.length() > 100) title = title.substring(0, 100);
+        String text = (e.text != null ? e.text.trim() : "");
+        if (text.length() > 25000) text = text.substring(0, 25000);
+        String difficulty = (e.difficulty != null ? e.difficulty.trim() : "Custom");
+
         synchronized (DatabaseManager.getInstance().getLock()) {
             try (Connection c = DatabaseManager.getInstance().getConnection();
                  PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO custom_exercises(user_id,title,text,difficulty) VALUES(?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, e.userId);
-                ps.setString(2, e.title != null ? e.title : "Untitled");
-                ps.setString(3, e.text != null ? e.text : "");
-                ps.setString(4, e.difficulty != null ? e.difficulty : "Custom");
+                ps.setString(2, title);
+                ps.setString(3, text);
+                ps.setString(4, difficulty);
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
                         e.id = rs.getInt(1);
+                        e.title = title;
+                        e.text = text;
+                        e.difficulty = difficulty;
                         return e;
                     }
                 }
@@ -59,13 +68,19 @@ public class CustomExerciseDAO {
 
     public void update(CustomExercise e) {
         if (e == null) return;
+        String title = (e.title != null ? e.title.trim() : "Untitled");
+        if (title.length() > 100) title = title.substring(0, 100);
+        String text = (e.text != null ? e.text.trim() : "");
+        if (text.length() > 25000) text = text.substring(0, 25000);
+        String difficulty = (e.difficulty != null ? e.difficulty.trim() : "Custom");
+
         synchronized (DatabaseManager.getInstance().getLock()) {
             try (Connection c = DatabaseManager.getInstance().getConnection();
                  PreparedStatement ps = c.prepareStatement(
                     "UPDATE custom_exercises SET title=?,text=?,difficulty=? WHERE id=?")) {
-                ps.setString(1, e.title != null ? e.title : "Untitled");
-                ps.setString(2, e.text != null ? e.text : "");
-                ps.setString(3, e.difficulty != null ? e.difficulty : "Custom");
+                ps.setString(1, title);
+                ps.setString(2, text);
+                ps.setString(3, difficulty);
                 ps.setInt(4, e.id);
                 ps.executeUpdate();
             } catch (SQLException ex) {

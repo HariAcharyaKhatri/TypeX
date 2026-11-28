@@ -139,11 +139,16 @@ public class TypingTextPanel extends JTextPane {
                 wordEnd++;
             }
 
+            // High-performance batched insertion: groups continuous runs of the same style
+            // reducing Document mutation events from O(N) to ~4-6 events per keystroke
+            StringBuilder spanText = new StringBuilder();
+            Style currentSpanStyle = null;
+
             for (int i = 0; i < target.length(); i++) {
-                String ch = String.valueOf(target.charAt(i));
+                char ch = target.charAt(i);
                 Style s;
                 if (i < typed.length()) {
-                    s = (typed.charAt(i) == target.charAt(i)) ? styleCorrect : styleIncorrect;
+                    s = (typed.charAt(i) == ch) ? styleCorrect : styleIncorrect;
                 } else if (i == cur) {
                     s = styleCurrentChar;
                 } else if (i >= wordStart && i < wordEnd) {
@@ -151,7 +156,21 @@ public class TypingTextPanel extends JTextPane {
                 } else {
                     s = stylePending;
                 }
-                doc.insertString(doc.getLength(), ch, s);
+
+                if (currentSpanStyle == null) {
+                    currentSpanStyle = s;
+                    spanText.append(ch);
+                } else if (currentSpanStyle == s) {
+                    spanText.append(ch);
+                } else {
+                    doc.insertString(doc.getLength(), spanText.toString(), currentSpanStyle);
+                    spanText.setLength(0);
+                    currentSpanStyle = s;
+                    spanText.append(ch);
+                }
+            }
+            if (spanText.length() > 0 && currentSpanStyle != null) {
+                doc.insertString(doc.getLength(), spanText.toString(), currentSpanStyle);
             }
 
             int caretPos = Math.min(cur, doc.getLength());

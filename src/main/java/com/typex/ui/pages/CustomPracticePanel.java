@@ -311,8 +311,15 @@ public class CustomPracticePanel extends JPanel implements MainFrame.Refreshable
         JFileChooser fc = new JFileChooser();
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File f = fc.getSelectedFile();
+            if (f.length() > 500_000) {
+                JOptionPane.showMessageDialog(this, "File is too large (maximum 500KB allowed for custom exercises).", "File Too Large", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             try {
                 String txt = Files.readString(f.toPath());
+                if (txt.length() > 25000) {
+                    txt = txt.substring(0, 25000);
+                }
                 textArea.setText(txt);
                 if (titleField.getText().isBlank()) {
                     String name = f.getName();

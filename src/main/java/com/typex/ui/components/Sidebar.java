@@ -133,6 +133,7 @@ public class Sidebar extends JPanel {
             super(label);
             this.key = key;
             this.iconKey = iconKey;
+            setToolTipText(label);
             setHorizontalAlignment(SwingConstants.LEFT);
             setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
             setPreferredSize(new Dimension(208, 38));

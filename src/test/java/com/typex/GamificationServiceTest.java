@@ -35,7 +35,7 @@ public class GamificationServiceTest {
 
     @BeforeEach
     public void createTestUser() {
-        String uname = "gamify_test_" + System.currentTimeMillis();
+        String uname = com.typex.testutil.TestDatabaseHelper.uniqueUsername("gamify_test");
         testUser = userDAO.create(uname);
         assertNotNull(testUser);
     }

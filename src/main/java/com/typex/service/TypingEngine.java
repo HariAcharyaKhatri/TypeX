@@ -53,6 +53,7 @@ public class TypingEngine {
     private int completedWords = 0;
 
     // Timing and rhythm
+    private com.typex.util.TimeSource timeSource = com.typex.util.TimeSource.SYSTEM;
     private long startNanos = -1;
     private long endNanos = -1;
     private boolean paused = false;
@@ -63,9 +64,22 @@ public class TypingEngine {
     private final List<Double> wpmSamples = new ArrayList<>();
 
     public TypingEngine(String target) {
+        this(target, com.typex.util.TimeSource.SYSTEM);
+    }
+
+    public TypingEngine(String target, com.typex.util.TimeSource timeSource) {
         this.target = target == null ? "" : target;
         this.targetWords = this.target.isEmpty() ? new String[0] : this.target.split("\\s+");
         this.wordStartIndices = computeWordIndices(this.target, this.targetWords);
+        this.timeSource = timeSource != null ? timeSource : com.typex.util.TimeSource.SYSTEM;
+    }
+
+    public synchronized void setTimeSource(com.typex.util.TimeSource timeSource) {
+        this.timeSource = timeSource != null ? timeSource : com.typex.util.TimeSource.SYSTEM;
+    }
+
+    public synchronized com.typex.util.TimeSource getTimeSource() {
+        return timeSource;
     }
 
     private static int[] computeWordIndices(String text, String[] words) {
@@ -123,21 +137,21 @@ public class TypingEngine {
 
     public synchronized void start() {
         if (startNanos < 0) {
-            startNanos = System.nanoTime();
+            startNanos = timeSource.nanoTime();
         }
     }
 
     public synchronized void stop() {
         if (endNanos < 0) {
             if (paused) resume();
-            endNanos = System.nanoTime();
+            endNanos = timeSource.nanoTime();
         }
     }
 
     public synchronized void pause() {
         if (!paused && hasStarted() && endNanos < 0) {
             paused = true;
-            pauseStartNanos = System.nanoTime();
+            pauseStartNanos = timeSource.nanoTime();
         }
     }
 
@@ -145,7 +159,7 @@ public class TypingEngine {
         if (paused) {
             paused = false;
             if (pauseStartNanos > 0) {
-                totalPausedNanos += (System.nanoTime() - pauseStartNanos);
+                totalPausedNanos += (timeSource.nanoTime() - pauseStartNanos);
                 pauseStartNanos = -1;
             }
         }
@@ -184,7 +198,7 @@ public class TypingEngine {
         if (paused || isComplete()) return false;
         start();
 
-        long now = System.nanoTime();
+        long now = timeSource.nanoTime();
         keystrokeTimestamps.add(now);
 
         totalKeystrokes++;
@@ -270,7 +284,7 @@ public class TypingEngine {
         long currentEnd;
         if (endNanos > 0) currentEnd = endNanos;
         else if (paused && pauseStartNanos > 0) currentEnd = pauseStartNanos;
-        else currentEnd = System.nanoTime();
+        else currentEnd = timeSource.nanoTime();
 
         long activeNanos = (currentEnd - startNanos) - totalPausedNanos;
         if (activeNanos < 0) activeNanos = 0;

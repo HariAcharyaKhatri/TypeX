@@ -44,7 +44,7 @@ public class RecommendationServiceTest {
 
     @BeforeEach
     public void createTestUser() {
-        String uname = "rec_test_" + System.currentTimeMillis();
+        String uname = com.typex.testutil.TestDatabaseHelper.uniqueUsername("rec_test");
         testUser = userDAO.create(uname);
         assertNotNull(testUser);
     }

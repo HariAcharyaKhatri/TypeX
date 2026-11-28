@@ -9,11 +9,16 @@ import com.typex.ui.pages.*;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainFrame extends JFrame {
     private final CardLayout cards = new CardLayout();
     private final JPanel content = new JPanel(cards);
+    private final Map<String, Component> pageMap = new LinkedHashMap<>();
     private final Sidebar sidebar;
     private final TopBar topBar;
     private User currentUser;
@@ -47,21 +52,63 @@ public class MainFrame extends JFrame {
         setContentPane(root);
 
         buildPages();
+        setupGlobalShortcuts();
         navigate("dashboard");
     }
 
+    private void registerPage(String key, Component comp) {
+        pageMap.put(key, comp);
+        content.add(comp, key);
+    }
+
     private void buildPages() {
-        content.add(new DashboardPanel(this), "dashboard");
-        content.add(new LearnTypingPanel(this), "learn");
-        content.add(new TypingTestPanel(this), "test");
-        content.add(new GamesPanel(this), "games");
-        content.add(new CustomPracticePanel(this), "custom");
-        content.add(new ChallengePanel(this), "challenge");
-        content.add(new StatisticsPanel(this), "stats");
-        content.add(new AchievementsPanel(this), "achievements");
-        content.add(new KeyboardTrainerPanel(this), "keyboard");
-        content.add(new SettingsPanel(this), "settings");
-        content.add(new AboutPanel(this), "about");
+        registerPage("dashboard", new DashboardPanel(this));
+        registerPage("learn", new LearnTypingPanel(this));
+        registerPage("test", new TypingTestPanel(this));
+        registerPage("games", new GamesPanel(this));
+        registerPage("custom", new CustomPracticePanel(this));
+        registerPage("challenge", new ChallengePanel(this));
+        registerPage("stats", new StatisticsPanel(this));
+        registerPage("achievements", new AchievementsPanel(this));
+        registerPage("keyboard", new KeyboardTrainerPanel(this));
+        registerPage("settings", new SettingsPanel(this));
+        registerPage("about", new AboutPanel(this));
+    }
+
+    private void setupGlobalShortcuts() {
+        JRootPane rp = getRootPane();
+        InputMap im = rp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = rp.getActionMap();
+        int menuKey = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+
+        // Ctrl+T: Theme Toggle
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_T, menuKey), "toggleTheme");
+        am.put("toggleTheme", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { onThemeToggle(); }
+        });
+
+        // Ctrl+P: Profile
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, menuKey), "openProfile");
+        am.put("openProfile", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { openProfile(); }
+        });
+
+        // Ctrl+M: Mute / Sound Toggle
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_M, menuKey), "toggleSound");
+        am.put("toggleSound", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                com.typex.util.SoundManager.toggleEnabled();
+                topBar.refresh();
+            }
+        });
+
+        // F11: Distraction Free Mode Toggle
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleDistractionFree");
+        am.put("toggleDistractionFree", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                setDistractionFree(!isDistractionFree());
+            }
+        });
     }
 
     public void navigate(String key) {
@@ -74,7 +121,10 @@ public class MainFrame extends JFrame {
         cards.show(content, key);
         sidebar.setActive(key);
         topBar.refresh();
-        refreshAll();
+        Component targetPage = pageMap.get(key);
+        if (targetPage instanceof Refreshable r) {
+            r.refresh();
+        }
     }
 
     public void setDistractionFree(boolean active) {
